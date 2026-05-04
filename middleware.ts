@@ -31,10 +31,10 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isAuthPath = path.startsWith("/login") || path.startsWith("/auth");
+  // /api/* faz auth próprio (cron secret OR user session); middleware não redireciona
+  const isApi = path.startsWith("/api/");
   const isPublicAsset =
-    path.startsWith("/_next") ||
-    path.startsWith("/favicon") ||
-    path === "/api/health";
+    path.startsWith("/_next") || path.startsWith("/favicon") || isApi;
 
   if (!user && !isAuthPath && !isPublicAsset) {
     const url = request.nextUrl.clone();

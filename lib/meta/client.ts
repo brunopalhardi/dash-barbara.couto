@@ -39,13 +39,10 @@ export function createMetaClient(cfg: MetaClientConfig): MetaClient {
   const sleep = cfg.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
   const base = `https://graph.facebook.com/${version}`;
 
-  async function request<T>(path: string, params: Record<string, string> = {}): Promise<T> {
-    const url = new URL(base + path);
-    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-
+  async function requestUrl<T>(absoluteUrl: string): Promise<T> {
     let lastErr: unknown;
     for (let attempt = 0; attempt <= RETRY_DELAYS_MS.length; attempt++) {
-      const res = await fetch(url.toString(), {
+      const res = await fetch(absoluteUrl, {
         headers: { Authorization: `Bearer ${cfg.token}` },
       });
       const usage = res.headers.get("x-business-use-case-usage");
@@ -99,17 +96,21 @@ export function createMetaClient(cfg: MetaClientConfig): MetaClient {
     throw (lastErr ?? new MetaApiError("unknown error"));
   }
 
+  async function request<T>(path: string, params: Record<string, string> = {}): Promise<T> {
+    const url = new URL(base + path);
+    for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+    return requestUrl<T>(url.toString());
+  }
+
   async function paginate<T>(path: string, params: Record<string, string>): Promise<T[]> {
     const out: T[] = [];
-    let next: string | undefined;
-    let first = true;
-    while (first || next) {
-      const url = first ? path : new URL(next!).pathname + new URL(next!).search;
-      const useParams = first ? params : {};
-      first = false;
-      const page = await request<MetaListResponse<T>>(url.startsWith(base) ? url.slice(base.length) : url, useParams);
+    const firstUrl = new URL(base + path);
+    for (const [k, v] of Object.entries(params)) firstUrl.searchParams.set(k, v);
+    let nextUrl: string | undefined = firstUrl.toString();
+    while (nextUrl) {
+      const page: MetaListResponse<T> = await requestUrl<MetaListResponse<T>>(nextUrl);
       out.push(...page.data);
-      next = page.paging?.next;
+      nextUrl = page.paging?.next;
     }
     return out;
   }

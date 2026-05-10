@@ -115,17 +115,14 @@ export function createMetaClient(cfg: MetaClientConfig): MetaClient {
     return out;
   }
 
-  // Only sync entities that are active or recently paused — skips deleted/archived
-  // historical clutter so the sync fits inside Vercel's function timeout.
+  // Only sync currently active entities — historical PAUSED clutter (often
+  // hundreds of campaigns paused years ago) blows the Vercel function timeout.
+  // To inspect old/paused work, run scripts/backfill-meta.ts manually.
   const ACTIVE_FILTER = JSON.stringify([
-    { field: "effective_status", operator: "IN", value: ["ACTIVE", "PAUSED"] },
+    { field: "effective_status", operator: "IN", value: ["ACTIVE"] },
   ]);
   const INSIGHTS_FILTER = JSON.stringify([
-    {
-      field: "ad.effective_status",
-      operator: "IN",
-      value: ["ACTIVE", "PAUSED"],
-    },
+    { field: "ad.effective_status", operator: "IN", value: ["ACTIVE"] },
   ]);
 
   return {

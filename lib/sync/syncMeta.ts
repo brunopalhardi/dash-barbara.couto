@@ -1,4 +1,4 @@
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, and, lt } from "drizzle-orm";
 import { db as defaultDb } from "@/lib/db";
 import { adAccounts, campaigns, adsets, ads, creatives } from "@/lib/schema/meta";
 import { adInsightsDaily } from "@/lib/schema/insights";
@@ -6,6 +6,27 @@ import { syncJobs } from "@/lib/schema/sync";
 import type { MetaClient } from "@/lib/meta/client";
 import type { DatePreset, MetaCreative, MetaInsight } from "@/lib/meta/types";
 import { MetaAuthError } from "@/lib/meta/errors";
+
+/**
+ * Job órfão = "running" há mais que ORPHAN_THRESHOLD_MS. O Vercel mata a função
+ * em 300s sem aviso, então o sync nunca consegue marcar `failed`. Marcamos esses
+ * jobs antes de iniciar o próximo pra UI não ficar travada em "em andamento".
+ */
+const ORPHAN_THRESHOLD_MS = 5 * 60 * 1000;
+
+export async function reapOrphanJobs(db: typeof defaultDb = defaultDb): Promise<number[]> {
+  const cutoff = new Date(Date.now() - ORPHAN_THRESHOLD_MS);
+  const reaped = await db
+    .update(syncJobs)
+    .set({
+      status: "failed",
+      finishedAt: new Date(),
+      errorMessage: "vercel timeout (orphan reaped)",
+    })
+    .where(and(eq(syncJobs.status, "running"), lt(syncJobs.startedAt, cutoff)))
+    .returning({ id: syncJobs.id });
+  return reaped.map((r) => r.id);
+}
 
 export type SyncMode = "backfill" | "daily" | "manual";
 
@@ -74,6 +95,9 @@ export async function syncMeta(
   const db = opts.db ?? defaultDb;
   const preset = MODE_TO_PRESET[opts.mode];
   const jobType = opts.mode === "backfill" ? "meta_full" : "meta_incremental";
+
+  // Limpa jobs órfãos (Vercel matou a função antes de marcar failed)
+  await reapOrphanJobs(db);
 
   const [job] = await db
     .insert(syncJobs)

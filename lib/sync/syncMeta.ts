@@ -35,11 +35,37 @@ function mapCreativeType(meta: MetaCreative): "image" | "video" | "carousel" | "
   return "other";
 }
 
-function leadCount(insight: MetaInsight): number {
-  if (!insight.actions) return 0;
-  return insight.actions
-    .filter((a) => a.action_type === "lead" || a.action_type.endsWith("_lead"))
+function sumActions(actions: MetaInsight["actions"], match: (t: string) => boolean): number {
+  if (!actions) return 0;
+  return actions
+    .filter((a) => match(a.action_type))
     .reduce((sum, a) => sum + Number(a.value || 0), 0);
+}
+
+function extractConversions(insight: MetaInsight): Record<string, number> {
+  const isLead = (t: string) =>
+    t === "lead" || t.endsWith("_lead") || t === "onsite_conversion.lead_grouped";
+  const isPurchase = (t: string) =>
+    t === "purchase" ||
+    t === "omni_purchase" ||
+    t.endsWith("_purchase") ||
+    t === "offsite_conversion.fb_pixel_purchase";
+  const isFollow = (t: string) =>
+    t === "onsite_conversion.follow" || t === "page_engagement" || t === "follow";
+  const isEngagement = (t: string) =>
+    t === "post_engagement" ||
+    t === "post_reaction" ||
+    t === "comment" ||
+    t === "post_save" ||
+    t === "post";
+
+  return {
+    lead: sumActions(insight.actions, isLead),
+    purchase: sumActions(insight.actions, isPurchase),
+    revenue: sumActions(insight.action_values, isPurchase),
+    follow: sumActions(insight.actions, isFollow),
+    engagement: sumActions(insight.actions, isEngagement),
+  };
 }
 
 export async function syncMeta(
@@ -244,8 +270,7 @@ export async function syncMeta(
       for (const ins of apiInsights) {
         const adDbId = adIdMap.get(ins.ad_id);
         if (!adDbId) continue;
-        const leads = leadCount(ins);
-        const conversions = { lead: leads };
+        const conversions = extractConversions(ins);
         await db
           .insert(adInsightsDaily)
           .values({

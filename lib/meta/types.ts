@@ -85,6 +85,7 @@ export interface MetaInsight {
   inline_link_clicks?: string;
   video_play_actions?: MetaInsightAction[];
   actions?: MetaInsightAction[];
+  action_values?: MetaInsightAction[];
 }
 
 export type DatePreset = "yesterday" | "last_3d" | "last_7d" | "last_30d";

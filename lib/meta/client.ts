@@ -115,6 +115,19 @@ export function createMetaClient(cfg: MetaClientConfig): MetaClient {
     return out;
   }
 
+  // Only sync entities that are active or recently paused — skips deleted/archived
+  // historical clutter so the sync fits inside Vercel's function timeout.
+  const ACTIVE_FILTER = JSON.stringify([
+    { field: "effective_status", operator: "IN", value: ["ACTIVE", "PAUSED"] },
+  ]);
+  const INSIGHTS_FILTER = JSON.stringify([
+    {
+      field: "ad.effective_status",
+      operator: "IN",
+      value: ["ACTIVE", "PAUSED"],
+    },
+  ]);
+
   return {
     getMe: () => request<MetaUser>("/me", { fields: "id,name" }),
     getAdAccounts: () =>
@@ -125,16 +138,19 @@ export function createMetaClient(cfg: MetaClientConfig): MetaClient {
     getCampaigns: (accountId) =>
       paginate<MetaCampaign>(`/${accountId}/campaigns`, {
         fields: "id,name,objective,status,daily_budget,lifetime_budget,start_time,stop_time",
+        filtering: ACTIVE_FILTER,
         limit: "200",
       }),
     getAdSets: (accountId) =>
       paginate<MetaAdSet>(`/${accountId}/adsets`, {
         fields: "id,campaign_id,name,status,daily_budget,optimization_goal,targeting",
+        filtering: ACTIVE_FILTER,
         limit: "200",
       }),
     getAds: (accountId) =>
       paginate<MetaAd>(`/${accountId}/ads`, {
         fields: "id,adset_id,name,status,creative{id},preview_shareable_link",
+        filtering: ACTIVE_FILTER,
         limit: "200",
       }),
     getCreatives: (accountId) =>
@@ -148,7 +164,8 @@ export function createMetaClient(cfg: MetaClientConfig): MetaClient {
         time_increment: "1",
         date_preset: opts.datePreset,
         fields:
-          "ad_id,date_start,date_stop,spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,inline_link_clicks,actions,video_play_actions",
+          "ad_id,date_start,date_stop,spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,inline_link_clicks,actions,action_values,video_play_actions",
+        filtering: INSIGHTS_FILTER,
         limit: "500",
       }),
   };

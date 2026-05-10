@@ -33,7 +33,7 @@ export type SyncMode = "backfill" | "daily" | "manual";
 const MODE_TO_PRESET: Record<SyncMode, DatePreset> = {
   backfill: "last_30d",
   daily: "last_7d",
-  manual: "last_7d",
+  manual: "last_30d",
 };
 
 /**

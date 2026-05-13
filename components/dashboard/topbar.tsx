@@ -13,6 +13,7 @@ const LABELS: Record<string, string> = {
   desafio: "Desafio",
   sono: "Sono",
   guia: "Guia",
+  instagram: "Instagram",
   settings: "Configurações",
   integrations: "Integrações",
 };

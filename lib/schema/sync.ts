@@ -14,6 +14,9 @@ import { adAccounts } from "./meta";
 export const syncJobType = pgEnum("sync_job_type", [
   "meta_full",
   "meta_incremental",
+  "ig_full",
+  "ig_incremental",
+  "ig_manual",
   "hotmart_replay",
   "match_recompute",
   "ping",

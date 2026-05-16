@@ -1,15 +1,22 @@
 import {
   getCycleOverlay,
+  getFunnelMetrics,
+  getHierarchyTable,
   getKpis,
+  getQualityScore,
   rangeCurrentCycle,
   rangePreviousCycle,
 } from "@/lib/queries/dashboard";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CycleSelector } from "@/components/dashboard/cycle-selector";
 import { EmptyState } from "@/components/dashboard/empty-state";
+import { FunnelChart } from "@/components/dashboard/funnel-chart";
 import { fmt } from "@/components/dashboard/format";
+import { HierarchyTable } from "@/components/dashboard/hierarchy-table";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { PageHeader } from "@/components/dashboard/page-header";
+import { QualityDonut } from "@/components/dashboard/quality-donut";
+import { TopCreatives } from "@/components/dashboard/top-creatives";
 import { CycleMetricTabs } from "./_metric-tabs";
 
 export const dynamic = "force-dynamic";
@@ -46,10 +53,15 @@ export default async function DesafioPage({
   const currentRange = rangeCurrentCycle(cycleDays, custom);
   const prevRange = rangePreviousCycle(currentRange);
 
-  const [kpis, prevKpis, overlay] = await Promise.all([
+  const [kpis, prevKpis, overlay, funnel, quality, campaignsTbl, adsetsTbl, adsTbl] = await Promise.all([
     getKpis("desafio", currentRange),
     getKpis("desafio", prevRange),
     getCycleOverlay("desafio", { cycleDays, cyclesBack: CYCLES_BACK, custom }),
+    getFunnelMetrics("desafio", currentRange),
+    getQualityScore("desafio", currentRange),
+    getHierarchyTable("desafio", currentRange, "campaign"),
+    getHierarchyTable("desafio", currentRange, "adset"),
+    getHierarchyTable("desafio", currentRange, "ad"),
   ]);
 
   const hasData = overlay.some((p) => p.cycleOffset === 0);
@@ -57,9 +69,36 @@ export default async function DesafioPage({
     ? `Custom · ${fmt.shortDate(currentRange.from)} → ${fmt.shortDate(currentRange.to)} (${cycleDays} dias)`
     : `Ciclo ${cycleDays} dias · ${fmt.shortDate(currentRange.from)} → ${fmt.shortDate(currentRange.to)}  (vs ciclo anterior)`;
 
+  // Funil: impressões → cliques → vendas. Width relativa.
+  const funnelStages = [
+    {
+      label: "Impressões",
+      value: fmt.int(funnel.impressions, true),
+      hint: `CPM ${fmt.money(funnel.cpm)}`,
+      width: 1,
+    },
+    {
+      label: "Cliques",
+      value: fmt.int(funnel.clicks, true),
+      hint: `CTR ${fmt.pct(funnel.ctr, 2)}`,
+      width: Math.max(0.4, funnel.clicks / Math.max(funnel.impressions, 1)),
+    },
+    {
+      label: "Vendas",
+      value: fmt.int(funnel.purchases),
+      hint: `Tx. Conv ${fmt.pct(funnel.conversionRate, 2)}`,
+      width: Math.max(0.2, funnel.purchases / Math.max(funnel.clicks, 1)),
+    },
+  ];
+
   return (
     <>
-      <PageHeader title="Desafio" subtitle={subtitle} hidePicker right={<CycleSelector defaultCycle={DEFAULT_CYCLE} />} />
+      <PageHeader
+        title="Desafio"
+        subtitle={subtitle}
+        hidePicker
+        right={<CycleSelector defaultCycle={DEFAULT_CYCLE} />}
+      />
 
       <section className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 mb-6">
         <KpiCard
@@ -90,7 +129,7 @@ export default async function DesafioPage({
         />
       </section>
 
-      <Card className="bg-card border-border/60">
+      <Card className="bg-card border-border/60 mb-6">
         <CardHeader>
           <CardTitle className="text-sm font-medium text-muted-foreground">
             Comparação de ciclos · últimos {CYCLES_BACK + 1} ciclos de {cycleDays} dias
@@ -102,6 +141,71 @@ export default async function DesafioPage({
           ) : (
             <EmptyState />
           )}
+        </CardContent>
+      </Card>
+
+      {/* Tráfego (funil) + Qualidade (donut) + Top criativos */}
+      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+        <Card className="bg-card border-border/60">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Tráfego</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <FunnelChart stages={funnelStages} />
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border/60">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Qualidade</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <QualityDonut
+              score={quality.score}
+              breakdown={[
+                {
+                  label: `ROAS (alvo ${fmt.ratio(quality.targets.roas)}x)`,
+                  weight: 0.4,
+                  value: quality.breakdown.roasComponent,
+                },
+                {
+                  label: `CPL (alvo ${fmt.money(quality.targets.cpl)})`,
+                  weight: 0.3,
+                  value: quality.breakdown.cplComponent,
+                },
+                {
+                  label: `Tx. Conv. (alvo ${fmt.pct(quality.targets.conversionRate, 1)})`,
+                  weight: 0.3,
+                  value: quality.breakdown.convComponent,
+                },
+              ]}
+            />
+          </CardContent>
+        </Card>
+
+        <Card className="bg-card border-border/60 lg:col-span-1">
+          <CardHeader>
+            <CardTitle className="text-sm font-medium text-muted-foreground">
+              Principais criativos
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <TopCreatives ads={adsTbl} limit={5} />
+          </CardContent>
+        </Card>
+      </section>
+
+      {/* Tabela hierárquica */}
+      <Card className="bg-card border-border/60">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Performance por hierarquia
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <HierarchyTable
+            data={{ campaign: campaignsTbl, adset: adsetsTbl, ad: adsTbl }}
+          />
         </CardContent>
       </Card>
     </>

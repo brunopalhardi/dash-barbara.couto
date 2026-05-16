@@ -473,3 +473,249 @@ export function rangeCurrentWeek(): DateRange {
     to: today.toISOString().slice(0, 10),
   };
 }
+
+/* ─────────────────────────────────────────────────────────────────────── */
+/* Fase 2 — Painéis avançados (funil, qualidade, hierarquia)               */
+/* ─────────────────────────────────────────────────────────────────────── */
+
+export interface FunnelMetrics {
+  impressions: number;
+  clicks: number;
+  purchases: number;
+  cpm: number;
+  ctr: number; // %
+  /** Tx. de conversão de clique → compra (purchases / clicks) */
+  conversionRate: number; // %
+  /** Tx. de conversão de impressão → compra (purchases / impressions) */
+  impressionToPurchase: number; // %
+  spend: number;
+}
+
+export async function getFunnelMetrics(
+  slug: ProductSlug,
+  range: DateRange,
+): Promise<FunnelMetrics> {
+  const k = await getKpis(slug, range);
+  return {
+    impressions: k.impressions,
+    clicks: k.clicks,
+    purchases: k.purchases,
+    cpm: k.cpm,
+    ctr: k.ctr,
+    conversionRate: divSafe(k.purchases, k.clicks) * 100,
+    impressionToPurchase: divSafe(k.purchases, k.impressions) * 100,
+    spend: k.spend,
+  };
+}
+
+export interface QualityScore {
+  /** 0-100 */
+  score: number;
+  /** Componentes que somam pro score (cada um 0-1) */
+  breakdown: {
+    roasComponent: number; // proxy: ROAS geral / 1.5 (capped at 1)
+    cplComponent: number; // proxy: 1 - (CPL real / CPL meta), capped
+    convComponent: number; // proxy: conversionRate / convMeta, capped at 1
+  };
+  raw: {
+    roas: number;
+    cpl: number;
+    conversionRate: number;
+  };
+  /** Metas usadas (default; podem virar configurável depois) */
+  targets: {
+    roas: number;
+    cpl: number;
+    conversionRate: number;
+  };
+}
+
+/**
+ * Score 0-100 composto:
+ *  40% — ROAS geral vs meta (ex.: meta 1.5)
+ *  30% — CPL real vs meta (ex.: meta R$ 50)
+ *  30% — conversion rate (clique → compra) vs meta (ex.: meta 1%)
+ *
+ * Não é uma fórmula científica — é uma média ponderada simples que serve
+ * pra dar uma cor/alerta rápida ("ta indo bem/mediano/ruim"). Metas
+ * podem virar configurável depois.
+ */
+export async function getQualityScore(
+  slug: ProductSlug,
+  range: DateRange,
+  targets: Partial<QualityScore["targets"]> = {},
+): Promise<QualityScore> {
+  const k = await getKpis(slug, range);
+  const t = {
+    roas: targets.roas ?? 1.5,
+    cpl: targets.cpl ?? 50,
+    conversionRate: targets.conversionRate ?? 1,
+  };
+  const convRate = divSafe(k.purchases, k.clicks) * 100;
+
+  const roasComponent = Math.max(0, Math.min(1, k.roas / t.roas));
+  const cplComponent =
+    k.cpl <= 0 ? 0 : Math.max(0, Math.min(1, 1 - (k.cpl - t.cpl) / t.cpl + 0.5));
+  const convComponent = Math.max(0, Math.min(1, convRate / t.conversionRate));
+
+  const score = Math.round(
+    (roasComponent * 0.4 + cplComponent * 0.3 + convComponent * 0.3) * 100,
+  );
+
+  return {
+    score,
+    breakdown: { roasComponent, cplComponent, convComponent },
+    raw: { roas: k.roas, cpl: k.cpl, conversionRate: convRate },
+    targets: t,
+  };
+}
+
+export type HierarchyLevel = "campaign" | "adset" | "ad";
+
+export interface HierarchyRow {
+  id: number;
+  name: string;
+  status: string;
+  /** Orçamento diário do nível (campaign ou adset) — null pra ad ou quando não há */
+  dailyBudget: number | null;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  leads: number;
+  purchases: number;
+  revenue: number;
+  cpa: number;
+  cpl: number;
+  ctr: number;
+  roas: number;
+  profit: number; // revenue - spend
+  thumbnailUrl: string | null; // só pra level=ad
+}
+
+export async function getHierarchyTable(
+  slug: ProductSlug,
+  range: DateRange,
+  level: HierarchyLevel,
+): Promise<HierarchyRow[]> {
+  const product = getProduct(slug);
+  const conds = [
+    gte(adInsightsDaily.date, range.from),
+    lte(adInsightsDaily.date, range.to),
+    ...productScopeWhere(product),
+  ];
+
+  const insightsExpr = {
+    spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+    impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
+    clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
+    leads: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'lead')::float), 0)`,
+    purchases: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::float), 0)`,
+    revenue: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'revenue')::float), 0)`,
+  };
+
+  let rows: Array<Omit<HierarchyRow, "cpa" | "cpl" | "ctr" | "roas" | "profit">> = [];
+
+  if (level === "campaign") {
+    const r = await db
+      .select({
+        id: campaigns.id,
+        name: campaigns.name,
+        status: campaigns.status,
+        dailyBudget: sql<string | null>`${campaigns.dailyBudget}`,
+        ...insightsExpr,
+      })
+      .from(adInsightsDaily)
+      .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
+      .innerJoin(adsets, eq(adsets.id, ads.adsetId))
+      .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
+      .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
+      .where(and(...conds))
+      .groupBy(campaigns.id, campaigns.name, campaigns.status, campaigns.dailyBudget);
+
+    rows = r.map((x) => ({
+      id: x.id,
+      name: x.name,
+      status: x.status,
+      dailyBudget: x.dailyBudget ? Number(x.dailyBudget) / 100 : null, // Meta retorna em centavos
+      spend: Number(x.spend),
+      impressions: Number(x.impressions),
+      clicks: Number(x.clicks),
+      leads: Number(x.leads),
+      purchases: Number(x.purchases),
+      revenue: Number(x.revenue),
+      thumbnailUrl: null,
+    }));
+  } else if (level === "adset") {
+    const r = await db
+      .select({
+        id: adsets.id,
+        name: adsets.name,
+        status: adsets.status,
+        dailyBudget: sql<string | null>`${adsets.dailyBudget}`,
+        ...insightsExpr,
+      })
+      .from(adInsightsDaily)
+      .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
+      .innerJoin(adsets, eq(adsets.id, ads.adsetId))
+      .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
+      .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
+      .where(and(...conds))
+      .groupBy(adsets.id, adsets.name, adsets.status, adsets.dailyBudget);
+
+    rows = r.map((x) => ({
+      id: x.id,
+      name: x.name,
+      status: x.status,
+      dailyBudget: x.dailyBudget ? Number(x.dailyBudget) / 100 : null,
+      spend: Number(x.spend),
+      impressions: Number(x.impressions),
+      clicks: Number(x.clicks),
+      leads: Number(x.leads),
+      purchases: Number(x.purchases),
+      revenue: Number(x.revenue),
+      thumbnailUrl: null,
+    }));
+  } else {
+    const r = await db
+      .select({
+        id: ads.id,
+        name: ads.name,
+        status: ads.status,
+        thumbnailUrl: creatives.thumbnailUrl,
+        ...insightsExpr,
+      })
+      .from(adInsightsDaily)
+      .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
+      .leftJoin(creatives, eq(creatives.id, ads.creativeId))
+      .innerJoin(adsets, eq(adsets.id, ads.adsetId))
+      .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
+      .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
+      .where(and(...conds))
+      .groupBy(ads.id, ads.name, ads.status, creatives.thumbnailUrl);
+
+    rows = r.map((x) => ({
+      id: x.id,
+      name: x.name,
+      status: x.status,
+      dailyBudget: null,
+      spend: Number(x.spend),
+      impressions: Number(x.impressions),
+      clicks: Number(x.clicks),
+      leads: Number(x.leads),
+      purchases: Number(x.purchases),
+      revenue: Number(x.revenue),
+      thumbnailUrl: x.thumbnailUrl,
+    }));
+  }
+
+  return rows
+    .map((r) => ({
+      ...r,
+      cpa: divSafe(r.spend, r.purchases),
+      cpl: divSafe(r.spend, r.leads),
+      ctr: divSafe(r.clicks, r.impressions) * 100,
+      roas: divSafe(r.revenue, r.spend),
+      profit: r.revenue - r.spend,
+    }))
+    .sort((a, b) => b.spend - a.spend);
+}

@@ -176,6 +176,40 @@ Cada validação é: Bruno olha em produção com dados reais, compara com Geren
 
 ---
 
+## Status das fases
+
+- ✅ Fase 1 — Seletor de ciclo flexível (commit `5d473d9`)
+- ✅ Fase 2 — Painéis avançados (commit `b07821d`)
+- ✅ Fase 3 — Tracking de orgânico via UTMs (esta entrega) — **pendente cliente colar o script nas LPs**
+- ⏳ Fase 4 — SendFlow integration
+- ⏳ Fase 5 — Aba "Pendentes no grupo"
+
+## Como instalar o tracking de orgânico (Fase 3)
+
+**Snippet pra colar no `<head>` de qualquer LP (própria ou seção custom do Hotmart):**
+
+```html
+<script async src="https://dash-traqueamento.vercel.app/track.js"></script>
+```
+
+O script:
+1. Lê `utm_source`, `utm_medium`, `utm_campaign`, `utm_content`, `utm_term`, `fbclid`, `gclid` da URL
+2. Salva tudo em cookie `tq_attr` (30 dias, first-touch wins)
+3. **Auto-captura forms** que tenham `<input type="email">` ou `<input name="phone|telefone|whatsapp">` — no submit, dispara POST pra `/api/track/lead`
+4. Expõe `window.traqueamento.capture({ email, phone, name })` se precisar disparar manualmente (ex.: SPA / pixel custom)
+
+**Convenção de UTMs (resumo):**
+
+| utm_source | Uso |
+|---|---|
+| `organic_insta_reels` | Reels do @obomdoalzheimer |
+| `organic_insta_bio` | Link da bio Instagram |
+| `organic_grupos` | Grupos WhatsApp/Telegram próprios |
+| `organic_email` | Email marketing |
+| `organic_youtube` | YouTube (se vier) |
+
+Pareados sempre com `utm_medium=organic` e `utm_campaign=<produto>_<ciclo>` (ex.: `desafio_2026_05`).
+
 ## Bug tracking
 
 > Cada vez que algo diverge ou quebra, registramos aqui com data + sintoma + causa + fix.

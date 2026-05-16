@@ -1,7 +1,7 @@
 # Plano — Desafio: aprofundar métricas, orgânico e WhatsApp
 
-> **Status:** rascunho, aguardando aprovação do Bruno
-> **Atualização:** 2026-05-13
+> **Status:** Fases 1, 2 e 3 entregues em produção. Aguardando validação do Bruno antes de seguir.
+> **Última atualização:** 2026-05-16
 > **Princípio:** uma fase de cada vez. Implementar → validar em produção com dados reais → debugar → próxima.
 > Bugs encontrados em cada fase ficam registrados na seção "Bug tracking" no fim deste doc.
 
@@ -180,9 +180,40 @@ Cada validação é: Bruno olha em produção com dados reais, compara com Geren
 
 - ✅ Fase 1 — Seletor de ciclo flexível (commit `5d473d9`)
 - ✅ Fase 2 — Painéis avançados (commit `b07821d`)
-- ✅ Fase 3 — Tracking de orgânico via UTMs (esta entrega) — **pendente cliente colar o script nas LPs**
+- ✅ Fase 3 — Tracking de orgânico via UTMs (commit `8a7ffb9`) — **pendente Bruno colar o script nas LPs**
+- ⏳ **Mini-Fase 3.5** — adaptar à convenção real de UTMs do Bruno + reescrever links Hotmart com `src` (escopo discutido em 16/05, ainda não implementado)
 - ⏳ Fase 4 — SendFlow integration
-- ⏳ Fase 5 — Aba "Pendentes no grupo"
+- ⏳ Fase 5 — Hotmart webhook + aba "Pendentes no grupo"
+
+## Mini-Fase 3.5 — ajustes pra convenção real (não implementada ainda)
+
+Descoberto ao ver a planilha de leads do Bruno (16/05): a convenção UTM real é diferente
+da proposta original do plano. A planilha usa:
+
+- `utm_source` = `Organico` ou `MetaAds` (origem ampla)
+- `utm_campaign` = `Desafio7D` / `B-VENDAS-DESAFIO-F-LP1` / `Grupos-Antigos`
+- `utm_medium` = `Instagram` / `Whatsapp` / `01-Q`
+- `utm_content` = `Reels` / `AD10-IMG-DESAFIO`
+
+A proposta original assumia `utm_medium=organic` como signal. Adaptar:
+
+1. **`/api/track/lead`** — classifier reconhece `utm_source ILIKE 'organic%'` ou `'Organico'` como organic; `'MetaAds'` ou fbclid como meta. Manter compatibilidade com a convenção original.
+2. **`/lib/queries/organic.ts`** — filtro por produto reconhece `utm_campaign` em qualquer caixa (já usa `ilike`, ok); revisar `productMatchClause` pra cobrir `Desafio7D` (slug+versão sem separador).
+3. **`/public/track.js`** — nova feature: ao carregar a página, scanear todos `<a href*="hotmart.com">` e `<a href*="pay.hotmart.com">` e injetar `?src=<utm_source>__<utm_campaign>__<utm_content>` no href. Faz isso só se ainda não tiver `src=` no link. Assim a atribuição sobrevive ao pulo LP→checkout mesmo se a pessoa não preencher form na LP.
+4. (opcional) **Botão de teste em `/settings/integrations`** que faz um POST mock pra `/api/track/lead` confirmando que tá tudo funcionando.
+
+Estimativa: ~1h.
+
+---
+
+## Decisões sobre Hotmart (puxado pra Fase 5)
+
+Bruno perguntou em 16/05 sobre como rastrear pós-checkout. Resposta:
+
+- **Webhook é o caminho** (95% dos casos) — Hotmart manda POST quando venda fecha, payload contém o `src` que veio do link. Cadastrar no painel apontando pra `https://dash-traqueamento.vercel.app/api/webhooks/hotmart` com HOTTOK.
+- **REST API** complementa pra backfill de vendas antigas (OAuth client credentials, `POST /security/oauth/token` + `GET /payments/api/v1/sales/history`). Implementar só depois do webhook estar estável.
+- Eventos relevantes: `PURCHASE_APPROVED`, `PURCHASE_REFUNDED`, `PURCHASE_CHARGEBACK`.
+- **Pendência do Bruno:** gerar HOTTOK, cadastrar no `Secret KEYs/tokens.md` + Vercel env `HOTMART_WEBHOOK_SECRET`, cadastrar webhook no painel Hotmart.
 
 ## Como instalar o tracking de orgânico (Fase 3)
 
@@ -215,11 +246,17 @@ Pareados sempre com `utm_medium=organic` e `utm_campaign=<produto>_<ciclo>` (ex.
 > Cada vez que algo diverge ou quebra, registramos aqui com data + sintoma + causa + fix.
 > Fase atual no topo.
 
-### Fase em andamento: _(nenhuma)_
+### Fase em andamento: _validação Fases 1-3 (Bruno comparando com Gerenciador / VK / planilha)_
 
-### Histórico
+### Pendências de validação
 
-_Vazio — começamos a registrar a partir da Fase 1._
+- [ ] **Fase 1** — números de KPIs com ciclos 7d/14d/15d batem com Gerenciador?
+- [ ] **Fase 2** — funil (CPM/CTR/Tx.Conv), score de qualidade (faz sentido as metas default 1.5x ROAS / R$50 CPL / 1% conv?), tabela hierárquica (orçamentos exibidos corretamente — Meta retorna em centavos, divido por 100)
+- [ ] **Fase 3** — script público `track.js` instalado em alguma LP de teste? Capturou algum lead? Painel Orgânico mostra dados?
+
+### Histórico de bugs corrigidos
+
+_Vazio — sem bugs reportados ainda._
 
 ---
 

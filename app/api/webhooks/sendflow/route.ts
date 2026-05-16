@@ -64,38 +64,21 @@ function pick<T>(obj: Record<string, unknown>, keys: string[]): T | undefined {
 function classifyEvent(value: string | undefined): EventType {
   if (!value) return "unknown";
   const v = value.toLowerCase();
-  if (
-    [
-      "joined",
-      "join",
-      "join_group",
-      "group_join",
-      "member_added",
-      "added",
-      "entered",
-      "entrou",
-      "entrada",
-      "add",
-    ].includes(v)
-  )
-    return "joined";
-  if (
-    [
-      "left",
-      "leave",
-      "leave_group",
-      "group_leave",
-      "member_removed",
-      "removed",
-      "exited",
-      "saiu",
-      "saida",
-      "saída",
-      "remove",
-      "kicked",
-    ].includes(v)
-  )
-    return "left";
+  // Match exato pra palavras-chave comuns
+  const joinedSet = [
+    "joined", "join", "join_group", "group_join", "member_added",
+    "added", "entered", "entrou", "entrada", "add",
+  ];
+  const leftSet = [
+    "left", "leave", "leave_group", "group_leave", "member_removed",
+    "removed", "exited", "saiu", "saida", "saída", "remove", "kicked",
+  ];
+  if (joinedSet.includes(v)) return "joined";
+  if (leftSet.includes(v)) return "left";
+  // Match parcial pra formato SendFlow (group.updated.members.added/removed)
+  // e outros estilos namespaced
+  if (/(members?[._-]?added|added|joined|entered)/i.test(v)) return "joined";
+  if (/(members?[._-]?removed|removed|left|leave|exited|kicked)/i.test(v)) return "left";
   return "unknown";
 }
 
@@ -170,14 +153,11 @@ function parsePayload(raw: unknown): ParsedEvent | null {
     "push_name",
     "pushname",
   ]);
-  const eventRaw = pick<string>(inner, [
-    "event",
-    "event_type",
-    "eventType",
-    "type",
-    "action",
-    "status",
-  ]);
+  // event/type costuma vir no root (ex.: SendFlow {event:"group.updated.members.added", data:{...}})
+  // mas pode vir também dentro do data — tenta os dois
+  const eventRaw =
+    pick<string>(root, ["event", "event_type", "eventType", "type", "action", "status"]) ??
+    pick<string>(inner, ["event", "event_type", "eventType", "type", "action", "status"]);
   const occurredAtRaw = pick<string | number>(inner, [
     "occurred_at",
     "occurredAt",

@@ -223,7 +223,7 @@ export async function getProductBreakdown(range: DateRange): Promise<ProductBrea
 
   for (const r of rows) {
     const slug = detectProduct(r.campaignName, r.metaAccountId);
-    if (slug === "geral") continue;
+    if (slug === "geral" || slug === "outros") continue;
     const cur =
       buckets.get(slug) ??
       ({

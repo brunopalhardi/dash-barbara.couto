@@ -3,11 +3,9 @@ import {
   getFunnelMetrics,
   getHierarchyTable,
   getKpis,
-  getQualityScore,
   rangeCurrentCycle,
   rangePreviousCycle,
 } from "@/lib/queries/dashboard";
-import { getOrganicSummary } from "@/lib/queries/organic";
 import { getWhatsappSummary } from "@/lib/queries/whatsapp";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CycleSelector } from "@/components/dashboard/cycle-selector";
@@ -15,11 +13,8 @@ import { EmptyState } from "@/components/dashboard/empty-state";
 import { FunnelChart } from "@/components/dashboard/funnel-chart";
 import { fmt } from "@/components/dashboard/format";
 import { GroupPanel } from "@/components/dashboard/group-panel";
-import { HierarchyTable } from "@/components/dashboard/hierarchy-table";
 import { KpiCard } from "@/components/dashboard/kpi-card";
-import { OrganicPanel } from "@/components/dashboard/organic-panel";
 import { PageHeader } from "@/components/dashboard/page-header";
-import { QualityDonut } from "@/components/dashboard/quality-donut";
 import { TopCreatives } from "@/components/dashboard/top-creatives";
 import { CycleMetricTabs } from "./_metric-tabs";
 
@@ -57,16 +52,12 @@ export default async function DesafioPage({
   const currentRange = rangeCurrentCycle(cycleDays, custom);
   const prevRange = rangePreviousCycle(currentRange);
 
-  const [kpis, prevKpis, overlay, funnel, quality, campaignsTbl, adsetsTbl, adsTbl, organic, whatsapp] = await Promise.all([
+  const [kpis, prevKpis, overlay, funnel, adsTbl, whatsapp] = await Promise.all([
     getKpis("desafio", currentRange),
     getKpis("desafio", prevRange),
     getCycleOverlay("desafio", { cycleDays, cyclesBack: CYCLES_BACK, custom }),
     getFunnelMetrics("desafio", currentRange),
-    getQualityScore("desafio", currentRange),
-    getHierarchyTable("desafio", currentRange, "campaign"),
-    getHierarchyTable("desafio", currentRange, "adset"),
     getHierarchyTable("desafio", currentRange, "ad"),
-    getOrganicSummary("desafio", currentRange),
     getWhatsappSummary("desafio", currentRange),
   ]);
 
@@ -75,7 +66,6 @@ export default async function DesafioPage({
     ? `Custom · ${fmt.shortDate(currentRange.from)} → ${fmt.shortDate(currentRange.to)} (${cycleDays} dias)`
     : `Ciclo ${cycleDays} dias · ${fmt.shortDate(currentRange.from)} → ${fmt.shortDate(currentRange.to)}  (vs ciclo anterior)`;
 
-  // Funil: impressões → cliques → vendas. Width relativa.
   const funnelStages = [
     {
       label: "Impressões",
@@ -114,6 +104,11 @@ export default async function DesafioPage({
           invertDelta
         />
         <KpiCard
+          label="Leads"
+          value={fmt.int(kpis.leads)}
+          delta={fmt.delta(kpis.leads, prevKpis.leads)}
+        />
+        <KpiCard
           label="Vendas"
           value={fmt.int(kpis.purchases)}
           delta={fmt.delta(kpis.purchases, prevKpis.purchases)}
@@ -127,11 +122,6 @@ export default async function DesafioPage({
           label="ROAS"
           value={fmt.ratio(kpis.roas)}
           delta={fmt.delta(kpis.roas, prevKpis.roas)}
-        />
-        <KpiCard
-          label="Ticket médio"
-          value={fmt.money(kpis.ticket)}
-          delta={fmt.delta(kpis.ticket, prevKpis.ticket)}
         />
       </section>
 
@@ -150,8 +140,7 @@ export default async function DesafioPage({
         </CardContent>
       </Card>
 
-      {/* Tráfego (funil) + Qualidade (donut) + Top criativos */}
-      <section className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+      <section className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
         <Card className="bg-card border-border/60">
           <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">Tráfego</CardTitle>
@@ -163,34 +152,6 @@ export default async function DesafioPage({
 
         <Card className="bg-card border-border/60">
           <CardHeader>
-            <CardTitle className="text-sm font-medium text-muted-foreground">Qualidade</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <QualityDonut
-              score={quality.score}
-              breakdown={[
-                {
-                  label: `ROAS (alvo ${fmt.ratio(quality.targets.roas)}x)`,
-                  weight: 0.4,
-                  value: quality.breakdown.roasComponent,
-                },
-                {
-                  label: `CPL (alvo ${fmt.money(quality.targets.cpl)})`,
-                  weight: 0.3,
-                  value: quality.breakdown.cplComponent,
-                },
-                {
-                  label: `Tx. Conv. (alvo ${fmt.pct(quality.targets.conversionRate, 1)})`,
-                  weight: 0.3,
-                  value: quality.breakdown.convComponent,
-                },
-              ]}
-            />
-          </CardContent>
-        </Card>
-
-        <Card className="bg-card border-border/60 lg:col-span-1">
-          <CardHeader>
             <CardTitle className="text-sm font-medium text-muted-foreground">
               Principais criativos
             </CardTitle>
@@ -201,19 +162,6 @@ export default async function DesafioPage({
         </Card>
       </section>
 
-      {/* Painel Orgânico */}
-      <Card className="bg-card border-border/60 mb-6">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Orgânico — leads por UTM
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <OrganicPanel data={organic} />
-        </CardContent>
-      </Card>
-
-      {/* Grupos WhatsApp (SendFlow) */}
       <Card className="bg-card border-border/60 mb-6">
         <CardHeader>
           <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -222,20 +170,6 @@ export default async function DesafioPage({
         </CardHeader>
         <CardContent>
           <GroupPanel data={whatsapp} />
-        </CardContent>
-      </Card>
-
-      {/* Tabela hierárquica */}
-      <Card className="bg-card border-border/60">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Performance por hierarquia
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <HierarchyTable
-            data={{ campaign: campaignsTbl, adset: adsetsTbl, ad: adsTbl }}
-          />
         </CardContent>
       </Card>
     </>

@@ -3,7 +3,9 @@
  *
  * Configuração no painel Hotmart:
  *   URL: https://dash-traqueamento.vercel.app/api/webhooks/hotmart
- *   Eventos: PURCHASE_APPROVED, PURCHASE_REFUNDED, PURCHASE_CHARGEBACK
+ *   Eventos processados: PURCHASE_APPROVED, PURCHASE_REFUNDED, PURCHASE_CHARGEBACK
+ *   (Outros eventos chegam e são ignorados com 200 — Bruno marca todos
+ *    no painel pra ter histórico futuro caso a gente expanda o handler.)
  *   Hottok: valor de HOTTOK na Vercel
  *
  * Auth: header X-Hotmart-Hottok deve bater com env HOTTOK.
@@ -18,6 +20,12 @@ import { purchases } from "@/lib/schema/purchases";
 import { parsePurchasePayload } from "@/lib/hotmart/parser";
 
 export const dynamic = "force-dynamic";
+
+const HANDLED_EVENTS = new Set([
+  "PURCHASE_APPROVED",
+  "PURCHASE_REFUNDED",
+  "PURCHASE_CHARGEBACK",
+]);
 
 function tokenFromRequest(req: NextRequest): string | null {
   return (
@@ -51,6 +59,16 @@ export async function POST(req: NextRequest) {
     raw = await req.json();
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
+  }
+
+  // Hotmart envia 15+ tipos de evento; só processamos 3. Pra outros, ack 200
+  // sem persistir — evita Hotmart desabilitar o webhook por taxa de erro alta.
+  const evt =
+    typeof raw === "object" && raw !== null
+      ? ((raw as Record<string, unknown>).event as string | undefined)
+      : undefined;
+  if (evt && !HANDLED_EVENTS.has(evt)) {
+    return NextResponse.json({ ok: true, ignored: true, event: evt });
   }
 
   const parsed = parsePurchasePayload(raw);

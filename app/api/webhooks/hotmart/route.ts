@@ -93,6 +93,8 @@ export async function POST(req: NextRequest) {
         buyerEmail: sql`coalesce(excluded.buyer_email, ${purchases.buyerEmail})`,
         buyerPhoneRaw: sql`coalesce(excluded.buyer_phone_raw, ${purchases.buyerPhoneRaw})`,
         buyerPhoneE164: sql`coalesce(excluded.buyer_phone_e164, ${purchases.buyerPhoneE164})`,
+        // raw_payload é sobrescrito de propósito: o último evento (refund/chargeback)
+        // costuma ser mais relevante pra debug que o approved original.
         rawPayload: raw as object,
         updatedAt: now,
       },

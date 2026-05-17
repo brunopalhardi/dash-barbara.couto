@@ -76,6 +76,12 @@ export async function* fetchSalesHistory(
     for (const item of result.data.items ?? []) {
       yield item;
     }
-    pageToken = result.data.page_info?.next_page_token ?? null;
+    const nextToken = result.data.page_info?.next_page_token ?? null;
+    // Guard contra loop infinito se o backend devolver o mesmo token (bug deles
+    // ou nosso). Rodando em cron sem supervisão, não dá pra confiar cego.
+    if (nextToken && nextToken === pageToken) {
+      throw new Error("hotmart sales-history: page_token não avançou");
+    }
+    pageToken = nextToken;
   } while (pageToken);
 }

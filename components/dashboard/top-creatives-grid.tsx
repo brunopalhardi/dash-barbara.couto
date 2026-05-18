@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { ExternalLink } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { fmt } from "./format";
@@ -6,6 +7,8 @@ import type { AdRow } from "@/lib/queries/dashboard";
 interface TopCreativesGridProps {
   ads: AdRow[];
   limit?: number;
+  /** Base href pra rota de detalhe (ex.: "/desafio/criativo"). Sem trailing slash. */
+  basePath: string;
 }
 
 function roasColor(roas: number): string {
@@ -14,11 +17,7 @@ function roasColor(roas: number): string {
   return "text-rose-400 bg-rose-500/10 border-rose-500/30";
 }
 
-function adLibraryUrl(metaAdId: string): string {
-  return `https://www.facebook.com/ads/library/?id=${metaAdId}`;
-}
-
-export function TopCreativesGrid({ ads, limit = 5 }: TopCreativesGridProps) {
+export function TopCreativesGrid({ ads, limit = 5, basePath }: TopCreativesGridProps) {
   const top = [...ads]
     .filter((a) => a.spend > 0)
     .sort((a, b) => b.spend - a.spend)
@@ -38,12 +37,10 @@ export function TopCreativesGrid({ ads, limit = 5 }: TopCreativesGridProps) {
         const roas = ad.spend > 0 ? ad.revenue / ad.spend : 0;
         const ctr = ad.impressions > 0 ? (ad.clicks / ad.impressions) * 100 : 0;
         return (
-          <a
+          <Link
             key={ad.adId}
-            href={adLibraryUrl(ad.metaAdId)}
-            target="_blank"
-            rel="noopener noreferrer"
-            title="Abrir no Facebook Ad Library"
+            href={`${basePath}/${ad.adId}`}
+            title="Ver análise detalhada"
             className="rounded-lg border border-border/60 bg-card overflow-hidden flex flex-col hover:border-primary/40 transition-colors group"
           >
             <div className="aspect-square bg-muted/30 relative flex items-center justify-center">
@@ -80,7 +77,7 @@ export function TopCreativesGrid({ ads, limit = 5 }: TopCreativesGridProps) {
                 <span>{fmt.int(ad.purchases)} vendas</span>
               </div>
             </div>
-          </a>
+          </Link>
         );
       })}
     </div>

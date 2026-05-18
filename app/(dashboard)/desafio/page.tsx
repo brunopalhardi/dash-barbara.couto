@@ -211,7 +211,7 @@ export default async function DesafioPage({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <TopCreativesGrid ads={adsTbl} limit={5} />
+          <TopCreativesGrid ads={adsTbl} limit={5} basePath="/desafio/criativo" />
         </CardContent>
       </Card>
 

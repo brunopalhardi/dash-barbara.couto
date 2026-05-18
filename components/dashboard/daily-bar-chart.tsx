@@ -133,15 +133,26 @@ export function DailyBarChart({ current, previous }: DailyBarChartProps) {
                 border: "1px solid var(--color-border)",
                 borderRadius: "6px",
                 fontSize: "12px",
+                color: "#fff",
               }}
-              formatter={(v) => metricCfg.format(Number(v))}
+              labelStyle={{ color: "#fff" }}
+              itemStyle={{ color: "#fff" }}
+              formatter={(v, name) => [
+                metricCfg.format(Number(v)),
+                name === "prev" ? "anterior" : "atual",
+              ]}
             />
             {previous && previous.length > 0 ? (
-              <Bar dataKey="prev" fill="var(--color-muted)" radius={[4, 4, 0, 0]} />
+              <Bar
+                dataKey="prev"
+                fill="var(--color-primary)"
+                fillOpacity={0.25}
+                radius={[4, 4, 0, 0]}
+              />
             ) : null}
             <Bar dataKey="value" radius={[4, 4, 0, 0]}>
               {merged.map((_, i) => (
-                <Cell key={i} fill="var(--color-primary)" />
+                <Cell key={i} fill="oklch(0.72 0.18 75)" />
               ))}
             </Bar>
           </BarChart>

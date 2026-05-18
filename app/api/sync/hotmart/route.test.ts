@@ -125,15 +125,15 @@ describe("POST /api/sync/hotmart", () => {
     expect(span).toBeLessThanOrEqual(26 * 3_600_000 + 60_000);
   });
 
-  it("clampa days a 90 (proteção contra timeout)", async () => {
+  it("clampa days a 365 (proteção contra timeout)", async () => {
     vi.spyOn(global, "fetch")
       .mockImplementationOnce(async () => tokenRes())
       .mockImplementationOnce(async () => pageRes([]));
     const res = await POST(buildReq({ days: 999 }));
     const json = (await res.json()) as { startDate: string; endDate: string };
     const span = new Date(json.endDate).getTime() - new Date(json.startDate).getTime();
-    // 90 dias + 2h overlap
-    expect(span).toBeLessThanOrEqual(90 * 86_400_000 + 2 * 3_600_000 + 60_000);
+    // 365 dias + 2h overlap
+    expect(span).toBeLessThanOrEqual(365 * 86_400_000 + 2 * 3_600_000 + 60_000);
   });
 });
 

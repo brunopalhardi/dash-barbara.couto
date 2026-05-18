@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 const DEFAULT_DAYS = 1;
-const MAX_DAYS = 90;
+const MAX_DAYS = 365;
 
 async function isAuthorized(req: NextRequest): Promise<boolean> {
   const auth = req.headers.get("authorization");

@@ -1,7 +1,11 @@
 import { and, eq, gte, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { purchases } from "@/lib/schema/purchases";
-import { whatsappGroupMembers } from "@/lib/schema/whatsapp";
+import {
+  whatsappGroupEvents,
+  whatsappGroupMembers,
+  whatsappGroups,
+} from "@/lib/schema/whatsapp";
 import type { ProductSlug } from "@/lib/products";
 import type { DateRange } from "./dashboard";
 
@@ -67,4 +71,222 @@ export async function getBuyersForCycle(
     valueCents: r.valueCents,
     inGroup: r.inGroupAny,
   }));
+}
+
+/**
+ * Conta compras aprovadas de um produto no período.
+ */
+export async function getApprovedPurchaseCount(
+  productSlug: ProductSlug,
+  range: DateRange,
+): Promise<number> {
+  const from = new Date(range.from + "T00:00:00");
+  const to = new Date(range.to + "T23:59:59");
+  const [row] = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(purchases)
+    .where(
+      and(
+        eq(purchases.productSlug, productSlug),
+        eq(purchases.status, "approved"),
+        gte(purchases.purchasedAt, from),
+        lte(purchases.purchasedAt, to),
+      ),
+    );
+  return Number(row?.n ?? 0);
+}
+
+/**
+ * Soma de value_cents (em reais) de compras aprovadas no período.
+ */
+export async function getApprovedPurchaseRevenue(
+  productSlug: ProductSlug,
+  range: DateRange,
+): Promise<number> {
+  const from = new Date(range.from + "T00:00:00");
+  const to = new Date(range.to + "T23:59:59");
+  const [row] = await db
+    .select({
+      cents: sql<number>`coalesce(sum(${purchases.valueCents}), 0)::int`,
+    })
+    .from(purchases)
+    .where(
+      and(
+        eq(purchases.productSlug, productSlug),
+        eq(purchases.status, "approved"),
+        gte(purchases.purchasedAt, from),
+        lte(purchases.purchasedAt, to),
+      ),
+    );
+  return Number(row?.cents ?? 0) / 100;
+}
+
+export interface InGroupStats {
+  buyersWithPhone: number;
+  inGroup: number;
+}
+
+/**
+ * Quantos compradores aprovados estão atualmente no grupo WhatsApp.
+ * Match via phoneNormalized = buyer_phone_e164.
+ */
+export async function getInGroupStats(
+  productSlug: ProductSlug,
+  range: DateRange,
+): Promise<InGroupStats> {
+  const from = new Date(range.from + "T00:00:00");
+  const to = new Date(range.to + "T23:59:59");
+  const [row] = await db
+    .select({
+      withPhone: sql<number>`count(*) filter (where ${purchases.buyerPhoneE164} is not null)::int`,
+      inGroup: sql<number>`count(*) filter (where exists(
+        select 1 from ${whatsappGroupMembers}
+        where ${whatsappGroupMembers.phoneNormalized} = ${purchases.buyerPhoneE164}
+          and ${whatsappGroupMembers.currentlyInGroup} = true
+      ))::int`,
+    })
+    .from(purchases)
+    .where(
+      and(
+        eq(purchases.productSlug, productSlug),
+        eq(purchases.status, "approved"),
+        gte(purchases.purchasedAt, from),
+        lte(purchases.purchasedAt, to),
+      ),
+    );
+  return {
+    buyersWithPhone: Number(row?.withPhone ?? 0),
+    inGroup: Number(row?.inGroup ?? 0),
+  };
+}
+
+export interface DailyPurchasePoint {
+  date: string;
+  count: number;
+  revenueCents: number;
+}
+
+/**
+ * Série diária de compras aprovadas pra alimentar gráfico de barras.
+ * Datas no fuso America/Sao_Paulo. Só retorna dias com compras (caller preenche zeros).
+ */
+export async function getDailyPurchaseSeries(
+  productSlug: ProductSlug,
+  range: DateRange,
+): Promise<DailyPurchasePoint[]> {
+  const from = new Date(range.from + "T00:00:00");
+  const to = new Date(range.to + "T23:59:59");
+  const rows = await db
+    .select({
+      date: sql<string>`to_char(${purchases.purchasedAt} at time zone 'America/Sao_Paulo', 'YYYY-MM-DD')`,
+      count: sql<number>`count(*)::int`,
+      revenueCents: sql<number>`coalesce(sum(${purchases.valueCents}), 0)::int`,
+    })
+    .from(purchases)
+    .where(
+      and(
+        eq(purchases.productSlug, productSlug),
+        eq(purchases.status, "approved"),
+        gte(purchases.purchasedAt, from),
+        lte(purchases.purchasedAt, to),
+      ),
+    )
+    .groupBy(
+      sql`to_char(${purchases.purchasedAt} at time zone 'America/Sao_Paulo', 'YYYY-MM-DD')`,
+    )
+    .orderBy(
+      sql`to_char(${purchases.purchasedAt} at time zone 'America/Sao_Paulo', 'YYYY-MM-DD')`,
+    );
+  return rows.map((r) => ({
+    date: r.date,
+    count: Number(r.count),
+    revenueCents: Number(r.revenueCents),
+  }));
+}
+
+export interface BuyerPurchaseEntry {
+  transactionId: string;
+  productSlug: string;
+  productNameRaw: string | null;
+  status: string;
+  valueCents: number | null;
+  purchasedAt: Date;
+}
+
+export interface BuyerGroupEvent {
+  groupName: string | null;
+  eventType: "joined" | "left" | "unknown";
+  occurredAt: Date;
+}
+
+export interface BuyerJourney {
+  purchases: BuyerPurchaseEntry[];
+  whatsappEvents: BuyerGroupEvent[];
+}
+
+/**
+ * Histórico completo de um comprador identificado por email OU phone.
+ * Casa por OR — se ambos vierem, busca em qualquer um. Sem identifier → vazio.
+ */
+export async function getBuyerJourney(
+  identifier: { email?: string | null; phone?: string | null },
+): Promise<BuyerJourney> {
+  const email = identifier.email?.trim() || null;
+  const phone = identifier.phone?.trim() || null;
+  if (!email && !phone) return { purchases: [], whatsappEvents: [] };
+
+  const purchaseConds = [];
+  if (email) purchaseConds.push(eq(purchases.buyerEmail, email));
+  if (phone) purchaseConds.push(eq(purchases.buyerPhoneE164, phone));
+  const purchaseWhere =
+    purchaseConds.length === 1
+      ? purchaseConds[0]
+      : sql`(${sql.join(purchaseConds, sql` OR `)})`;
+
+  const purchaseRows = await db
+    .select({
+      transactionId: purchases.transactionId,
+      productSlug: purchases.productSlug,
+      productNameRaw: purchases.productNameRaw,
+      status: purchases.status,
+      valueCents: purchases.valueCents,
+      purchasedAt: purchases.purchasedAt,
+    })
+    .from(purchases)
+    .where(purchaseWhere)
+    .orderBy(sql`${purchases.purchasedAt} desc`);
+
+  // Eventos de grupo só por phone (sendflow não rastreia email)
+  let eventRows: { groupName: string | null; eventType: "joined" | "left" | "unknown"; occurredAt: Date }[] = [];
+  if (phone) {
+    eventRows = await db
+      .select({
+        groupName: whatsappGroups.name,
+        eventType: whatsappGroupEvents.eventType,
+        occurredAt: whatsappGroupEvents.occurredAt,
+      })
+      .from(whatsappGroupEvents)
+      .leftJoin(
+        whatsappGroups,
+        eq(whatsappGroupEvents.groupExternalId, whatsappGroups.externalId),
+      )
+      .where(eq(whatsappGroupEvents.phoneNormalized, phone))
+      .orderBy(sql`${whatsappGroupEvents.occurredAt} desc`);
+  }
+
+  return {
+    purchases: purchaseRows.map((p) => ({
+      transactionId: p.transactionId,
+      productSlug: p.productSlug,
+      productNameRaw: p.productNameRaw,
+      status: p.status,
+      valueCents: p.valueCents,
+      purchasedAt: p.purchasedAt,
+    })),
+    whatsappEvents: eventRows.map((e) => ({
+      groupName: e.groupName,
+      eventType: e.eventType,
+      occurredAt: e.occurredAt,
+    })),
+  };
 }

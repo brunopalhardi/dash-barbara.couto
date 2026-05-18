@@ -14,6 +14,9 @@ import { parsePurchasePayload, type ParsedPurchase } from "./parser";
 
 const STATUS_TO_EVENT: Record<string, "PURCHASE_APPROVED" | "PURCHASE_REFUNDED" | "PURCHASE_CHARGEBACK"> = {
   APPROVED: "PURCHASE_APPROVED",
+  // COMPLETE = compra finalizada (ex.: assinatura que completou ciclo). Bruno
+  // pediu pra contar como venda paga junto com APPROVED.
+  COMPLETE: "PURCHASE_APPROVED",
   REFUNDED: "PURCHASE_REFUNDED",
   CHARGEBACK: "PURCHASE_CHARGEBACK",
 };

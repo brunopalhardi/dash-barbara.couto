@@ -40,13 +40,18 @@ describe("parseSalesHistoryItem", () => {
     expect(parseSalesHistoryItem(makeItem("CHARGEBACK"))!.status).toBe("chargeback");
   });
 
+  it("status COMPLETE → status approved (compra finalizada conta como paga)", () => {
+    const r = parseSalesHistoryItem(makeItem("COMPLETE"));
+    expect(r!.status).toBe("approved");
+    expect(r!.event).toBe("PURCHASE_APPROVED");
+  });
+
   it("status não suportado retorna null (STARTED, WAITING_PAYMENT, EXPIRED, etc)", () => {
     for (const s of [
       "STARTED",
       "WAITING_PAYMENT",
       "EXPIRED",
       "CANCELED",
-      "COMPLETE",
       "DELAYED",
       "NO_FUNDS",
       "OVERDUE",

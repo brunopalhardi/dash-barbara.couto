@@ -9,6 +9,7 @@ import {
   getApprovedPurchaseRevenue,
   getInGroupStats,
   getDailyPurchaseSeries,
+  getBuyerJourney,
 } from "./purchases";
 
 const PHONE_IN_GROUP = "5511111111111";
@@ -172,5 +173,27 @@ describe("getDailyPurchaseSeries", () => {
     expect(series.length).toBeGreaterThanOrEqual(1);
     const totalCount = series.reduce((s, r) => s + r.count, 0);
     expect(totalCount).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("getBuyerJourney", () => {
+  it("retorna compras do mesmo telefone (lookup por phone)", async () => {
+    const result = await getBuyerJourney({ phone: "5511111111111" });
+    expect(result.purchases.length).toBeGreaterThanOrEqual(1);
+    // Events lookup uses whatsapp_group_events table (not members). Test setup
+    // only inserted into members, so events count may be 0. Don't assert > 0.
+    expect(Array.isArray(result.whatsappEvents)).toBe(true);
+  });
+
+  it("retorna vazio quando nem email nem phone batem nada", async () => {
+    const result = await getBuyerJourney({ phone: "5599999999999" });
+    expect(result.purchases).toEqual([]);
+    expect(result.whatsappEvents).toEqual([]);
+  });
+
+  it("retorna vazio quando nenhum identifier passado", async () => {
+    const result = await getBuyerJourney({});
+    expect(result.purchases).toEqual([]);
+    expect(result.whatsappEvents).toEqual([]);
   });
 });

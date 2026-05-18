@@ -204,7 +204,7 @@ export default async function GuiaPage({
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <TopCreativesGrid ads={adsTbl} limit={5} />
+          <TopCreativesGrid ads={adsTbl} limit={5} basePath="/guia/criativo" />
         </CardContent>
       </Card>
 

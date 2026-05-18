@@ -100,6 +100,28 @@ function pickByPriority(
   return 0;
 }
 
+/**
+ * Extrai uma métrica de video_play_actions[] do Meta pelo action_type.
+ * Meta retorna como [{ action_type: "video_view", value: "1234" }, ...].
+ * Os action_types relevantes:
+ *   - video_view (views totais)
+ *   - video_3_sec_watched_actions
+ *   - video_p25_watched_actions
+ *   - video_p50_watched_actions
+ *   - video_p75_watched_actions
+ *   - video_p95_watched_actions
+ */
+function parseVideoMetric(
+  actions: MetaInsight["video_play_actions"] | undefined,
+  actionType: string,
+): number | null {
+  if (!actions) return null;
+  const found = actions.find((a) => a.action_type === actionType);
+  if (!found) return null;
+  const n = Number(found.value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function extractConversions(insight: MetaInsight): Record<string, number> {
   const isLead = (t: string) =>
     t === "lead" ||
@@ -341,6 +363,12 @@ export async function syncMeta(
         const adDbId = adIdMap.get(ins.ad_id);
         if (!adDbId) continue;
         const conversions = extractConversions(ins);
+        const videoViews = parseVideoMetric(ins.video_play_actions, "video_view");
+        const videoP3s = parseVideoMetric(ins.video_play_actions, "video_3_sec_watched_actions");
+        const videoP25 = parseVideoMetric(ins.video_play_actions, "video_p25_watched_actions");
+        const videoP50 = parseVideoMetric(ins.video_play_actions, "video_p50_watched_actions");
+        const videoP75 = parseVideoMetric(ins.video_play_actions, "video_p75_watched_actions");
+        const videoP95 = parseVideoMetric(ins.video_play_actions, "video_p95_watched_actions");
         await db
           .insert(adInsightsDaily)
           .values({
@@ -354,6 +382,12 @@ export async function syncMeta(
             reach: ins.reach ? Number(ins.reach) : null,
             frequency: ins.frequency ?? null,
             linkClicks: ins.inline_link_clicks ? Number(ins.inline_link_clicks) : null,
+            videoViews,
+            videoP3s,
+            videoP25,
+            videoP50,
+            videoP75,
+            videoP95,
             conversions,
           })
           .onConflictDoUpdate({
@@ -367,6 +401,12 @@ export async function syncMeta(
               reach: ins.reach ? Number(ins.reach) : null,
               frequency: ins.frequency ?? null,
               linkClicks: ins.inline_link_clicks ? Number(ins.inline_link_clicks) : null,
+              videoViews,
+              videoP3s,
+              videoP25,
+              videoP50,
+              videoP75,
+              videoP95,
               conversions,
               updatedAt: new Date(),
             },

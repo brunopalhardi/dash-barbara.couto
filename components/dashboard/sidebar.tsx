@@ -10,6 +10,7 @@ import {
   Sun,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { VERSION, COMMIT_SHA } from "@/lib/version";
 
 const items = [
   { href: "/", label: "Visão Geral", icon: LayoutDashboard },
@@ -92,7 +93,10 @@ export function Sidebar() {
           Modo Claro
         </button>
         <div className="text-[10px] uppercase tracking-[0.18em] text-muted-foreground/70">
-          Traqueamento v0.3.0
+          Traqueamento v{VERSION}{" "}
+          <span className="text-muted-foreground/50 normal-case tracking-normal">
+            · {COMMIT_SHA}
+          </span>
         </div>
       </div>
     </aside>

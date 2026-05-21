@@ -9,9 +9,9 @@ interface CreativeDetailPanelProps {
 }
 
 export function CreativeDetailPanel({ ad }: CreativeDetailPanelProps) {
-  // videoViews === 0 → ad de imagem; Hook/Hold/Body/Score não fazem sentido
-  // (não há video_play_actions). Pra vídeos sem views no período (edge case
-  // raro), idem — sem dados, esconde pra não mostrar 0% confuso.
+  // videoViews === 0 → ad de imagem; métricas de retenção de vídeo não fazem
+  // sentido (não há video_play_actions). Pra vídeos sem views no período
+  // (edge case raro), idem — sem dados, esconde pra não mostrar 0% confuso.
   const isVideo = ad.videoViews > 0;
   return (
     <div className="space-y-4">
@@ -89,19 +89,19 @@ export function CreativeDetailPanel({ ad }: CreativeDetailPanelProps) {
             {isVideo ? (
               <>
                 <MetricBar
-                  label="Hook Rate"
+                  label="Visualizou 3s"
                   value={fmt.pct(ad.hookRate, 1)}
                   percent={ad.hookRate}
                   variant="hook"
                 />
                 <MetricBar
-                  label="Hold Rate"
+                  label="Visualizou 25%"
                   value={fmt.pct(ad.holdRate, 1)}
                   percent={ad.holdRate}
                   variant="hold"
                 />
                 <MetricBar
-                  label="Body Rate"
+                  label="Visualizou 50%"
                   value={fmt.pct(ad.bodyRate, 1)}
                   percent={ad.bodyRate}
                   variant="body"
@@ -114,14 +114,6 @@ export function CreativeDetailPanel({ ad }: CreativeDetailPanelProps) {
               percent={Math.min(100, ad.cpl > 0 ? Math.max(5, 100 - ad.cpl * 2) : 0)}
               variant="cpl"
             />
-            {isVideo ? (
-              <MetricBar
-                label="Score"
-                value={ad.score.toFixed(1)}
-                percent={Math.min(100, ad.score)}
-                variant="score"
-              />
-            ) : null}
           </div>
         </CardContent>
       </Card>

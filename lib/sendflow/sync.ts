@@ -42,12 +42,19 @@ export interface SendflowSyncStats {
 
 interface SyncOpts {
   token: string;
+  /**
+   * Lista de external_ids de releases a sincronizar. Se vazio, sincroniza
+   * todos. Bruno só quer a release de CAPTAÇÃO do Desafio — passar via
+   * env SENDFLOW_RELEASE_IDS (comma-separated) ou direto via param aqui.
+   */
+  releaseIdsWhitelist?: string[];
 }
 
 export async function syncSendflow(opts: SyncOpts): Promise<SendflowSyncStats> {
   const t0 = Date.now();
   const now = new Date();
   const client = createSendflowClient(opts.token);
+  const whitelist = new Set(opts.releaseIdsWhitelist ?? []);
 
   const [job] = await db
     .insert(syncJobs)
@@ -62,7 +69,11 @@ export async function syncSendflow(opts: SyncOpts): Promise<SendflowSyncStats> {
     const apiReleases = await client.getReleases();
     await sleep(THROTTLE_MS);
 
-    for (const r of apiReleases) {
+    const filteredReleases = whitelist.size > 0
+      ? apiReleases.filter((r) => whitelist.has(r.id))
+      : apiReleases;
+
+    for (const r of filteredReleases) {
       // Upsert release
       const [{ id: releaseDbId }] = await db
         .insert(sendflowReleases)

@@ -14,15 +14,19 @@ interface Props {
   showInGroup?: boolean;
 }
 
-function maskPhone(e164: string | null): string {
+function formatPhone(e164: string | null): string {
   if (!e164) return "—";
-  // 5511987654321 → +55 11 9****-4321
-  if (e164.length < 10) return e164;
+  // 5511987654321 → +55 11 98765-4321 (visualização BR padrão, número completo)
+  if (e164.length < 12) return `+${e164}`;
   const cc = e164.slice(0, 2);
   const ddd = e164.slice(2, 4);
-  const head = e164.slice(4, 5);
-  const tail = e164.slice(-4);
-  return `+${cc} ${ddd} ${head}****-${tail}`;
+  const rest = e164.slice(4);
+  // Quebra rest em head-tail no 5º dígito (celular BR: 9XXXX-XXXX)
+  if (rest.length === 9) {
+    return `+${cc} ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
+  }
+  // Fallback (fixo 8 dígitos, ou formato inesperado)
+  return `+${cc} ${ddd} ${rest.slice(0, -4)}-${rest.slice(-4)}`;
 }
 
 function whatsappLink(e164: string | null): string | null {
@@ -77,7 +81,7 @@ export function BuyersTable({ buyers, showInGroup = false }: Props) {
                       onClick={(e) => e.stopPropagation()}
                       className="text-primary hover:underline"
                     >
-                      {maskPhone(b.buyerPhoneE164)}
+                      {formatPhone(b.buyerPhoneE164)}
                     </Link>
                   ) : (
                     <span className="text-muted-foreground">—</span>

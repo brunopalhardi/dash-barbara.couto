@@ -41,8 +41,14 @@ export async function POST(req: NextRequest) {
       { status: 500 },
     );
   }
+  // SENDFLOW_RELEASE_IDS: csv de external_ids pra filtrar (ex: a release de
+  // CAPTAÇÃO do Desafio). Se não setar, sincroniza todas as releases.
+  const releaseIdsWhitelist = (process.env.SENDFLOW_RELEASE_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
   try {
-    const stats = await syncSendflow({ token });
+    const stats = await syncSendflow({ token, releaseIdsWhitelist });
     return NextResponse.json({ ok: true, ...stats });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

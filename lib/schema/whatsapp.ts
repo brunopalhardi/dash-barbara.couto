@@ -43,6 +43,9 @@ export const whatsappGroups = pgTable(
     inviteCode: text("invite_code"),
     participantsAmount: integer("participants_amount"),
     isFull: boolean("is_full"),
+    /** Admins do grupo (vindos da API SendFlow). Subtraídos do total
+     * pra calcular leads reais. Shape: [{name, number}]. */
+    admins: jsonb("admins").$type<Array<{ name?: string; number?: string }>>(),
     firstSeenAt: timestamp("first_seen_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

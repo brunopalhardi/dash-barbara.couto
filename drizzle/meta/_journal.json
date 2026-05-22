@@ -85,6 +85,13 @@
       "when": 1779393042001,
       "tag": "0011_steep_punisher",
       "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1779411361073,
+      "tag": "0012_noisy_ultimates",
+      "breakpoints": true
     }
   ]
 }

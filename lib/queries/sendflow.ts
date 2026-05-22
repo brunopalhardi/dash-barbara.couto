@@ -9,7 +9,7 @@
  * Pra dashboard semanal/mensal, os agregados oficiais são mais confiáveis
  * que reconstruir via eventos (que dependem do webhook estar ativo).
  */
-import { and, asc, eq, gte, lte } from "drizzle-orm";
+import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { whatsappGroups } from "@/lib/schema/whatsapp";
 import { sendflowReleases, sendflowAnalyticsDaily } from "@/lib/schema/sendflow";
@@ -68,17 +68,31 @@ export async function getSendflowGroupSummary(
     return emptyResult(null);
   }
 
-  // 2) Grupos da release
+  // 2) Grupos da release — desconta admins do total
   const groupRows = await db
     .select({
       externalId: whatsappGroups.externalId,
       name: whatsappGroups.name,
-      participantsAmount: whatsappGroups.participantsAmount,
+      rawParticipants: whatsappGroups.participantsAmount,
+      adminsCount: sql<number>`coalesce(jsonb_array_length(${whatsappGroups.admins}), 0)::int`,
       isFull: whatsappGroups.isFull,
       inviteCode: whatsappGroups.inviteCode,
     })
     .from(whatsappGroups)
-    .where(eq(whatsappGroups.sendflowReleaseExternalId, release.externalId));
+    .where(eq(whatsappGroups.sendflowReleaseExternalId, release.externalId))
+    .then((rows) =>
+      rows.map((r) => ({
+        externalId: r.externalId,
+        name: r.name,
+        // "Membros ativos" exclui admins — o que importa pro Bruno são os leads reais
+        participantsAmount:
+          r.rawParticipants !== null
+            ? Math.max(0, r.rawParticipants - (r.adminsCount ?? 0))
+            : null,
+        isFull: r.isFull,
+        inviteCode: r.inviteCode,
+      })),
+    );
 
   // 3) Analytics diárias no período
   const dailyRows = await db

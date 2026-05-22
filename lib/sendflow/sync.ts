@@ -121,6 +121,7 @@ export async function syncSendflow(opts: SyncOpts): Promise<SendflowSyncStats> {
             inviteCode: g.inviteCode ?? null,
             participantsAmount: g.participantsAmount ?? null,
             isFull: g.full ?? null,
+            admins: g.admins ?? null,
           })
           .onConflictDoUpdate({
             target: whatsappGroups.externalId,
@@ -133,6 +134,7 @@ export async function syncSendflow(opts: SyncOpts): Promise<SendflowSyncStats> {
               inviteCode: g.inviteCode ?? null,
               participantsAmount: g.participantsAmount ?? null,
               isFull: g.full ?? null,
+              admins: g.admins ?? null,
               updatedAt: now,
             },
           });

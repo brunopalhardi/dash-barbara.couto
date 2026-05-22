@@ -17,7 +17,11 @@
 import { eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { whatsappGroups } from "@/lib/schema/whatsapp";
-import { sendflowReleases, sendflowAnalyticsDaily } from "@/lib/schema/sendflow";
+import {
+  sendflowReleases,
+  sendflowAnalyticsDaily,
+  sendflowLeadscoring,
+} from "@/lib/schema/sendflow";
 import { syncJobs } from "@/lib/schema/sync";
 import {
   createSendflowClient,
@@ -25,6 +29,8 @@ import {
   type SendflowAnalytics,
   type SendflowGroup,
 } from "./client";
+import { normalizePhone } from "@/lib/utils/phone";
+import { isAdminPhone } from "./admins";
 
 const THROTTLE_MS = 1500;
 
@@ -37,6 +43,7 @@ export interface SendflowSyncStats {
   releases: number;
   groups: number;
   analyticsRows: number;
+  leadscoringRows: number;
   durationMs: number;
 }
 
@@ -64,6 +71,7 @@ export async function syncSendflow(opts: SyncOpts): Promise<SendflowSyncStats> {
   let releaseCount = 0;
   let groupCount = 0;
   let analyticsRows = 0;
+  let leadscoringRows = 0;
 
   try {
     const apiReleases = await client.getReleases();
@@ -185,6 +193,42 @@ export async function syncSendflow(opts: SyncOpts): Promise<SendflowSyncStats> {
           analyticsRows++;
         }
       }
+
+      // Leadscoring (rate limit MUITO apertado — ~10min entre downloads).
+      // Falha em uma release não derruba o sync inteiro.
+      try {
+        const apiScoring = await client.getLeadscoring(r.id);
+        await sleep(THROTTLE_MS);
+
+        for (const row of apiScoring) {
+          const phone = normalizePhone(row.phone);
+          if (!phone) continue;
+          if (isAdminPhone(phone)) continue;
+          await db
+            .insert(sendflowLeadscoring)
+            .values({
+              releaseId: releaseDbId,
+              phoneNormalized: phone,
+              score: row.score,
+              rank: row.rank,
+              fetchedAt: now,
+            })
+            .onConflictDoUpdate({
+              target: [
+                sendflowLeadscoring.releaseId,
+                sendflowLeadscoring.phoneNormalized,
+              ],
+              set: {
+                score: row.score,
+                rank: row.rank,
+                fetchedAt: now,
+              },
+            });
+          leadscoringRows++;
+        }
+      } catch (err) {
+        console.warn(`[sendflow-sync] getLeadscoring(${r.id}) falhou:`, err);
+      }
     }
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -194,9 +238,9 @@ export async function syncSendflow(opts: SyncOpts): Promise<SendflowSyncStats> {
         .set({
           status: "failed",
           finishedAt: new Date(),
-          rowsProcessed: groupCount + analyticsRows,
+          rowsProcessed: groupCount + analyticsRows + leadscoringRows,
           errorMessage: msg.slice(0, 500),
-          details: { releaseCount, groupCount, analyticsRows },
+          details: { releaseCount, groupCount, analyticsRows, leadscoringRows },
         })
         .where(eq(syncJobs.id, job.id));
     } catch (uErr) {
@@ -211,8 +255,8 @@ export async function syncSendflow(opts: SyncOpts): Promise<SendflowSyncStats> {
     .set({
       status: "done",
       finishedAt: new Date(),
-      rowsProcessed: groupCount + analyticsRows,
-      details: { releaseCount, groupCount, analyticsRows, durationMs },
+      rowsProcessed: groupCount + analyticsRows + leadscoringRows,
+      details: { releaseCount, groupCount, analyticsRows, leadscoringRows, durationMs },
     })
     .where(eq(syncJobs.id, job.id));
 
@@ -221,6 +265,7 @@ export async function syncSendflow(opts: SyncOpts): Promise<SendflowSyncStats> {
     releases: releaseCount,
     groups: groupCount,
     analyticsRows,
+    leadscoringRows,
     durationMs,
   };
 }

@@ -9,10 +9,15 @@
  * Pra dashboard semanal/mensal, os agregados oficiais são mais confiáveis
  * que reconstruir via eventos (que dependem do webhook estar ativo).
  */
-import { and, asc, eq, gte, lte, sql } from "drizzle-orm";
+import { and, asc, desc, eq, gte, lte, ilike, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { whatsappGroups } from "@/lib/schema/whatsapp";
-import { sendflowReleases, sendflowAnalyticsDaily } from "@/lib/schema/sendflow";
+import { purchases } from "@/lib/schema/purchases";
+import {
+  sendflowReleases,
+  sendflowAnalyticsDaily,
+  sendflowLeadscoring,
+} from "@/lib/schema/sendflow";
 import type { DateRange } from "./dashboard";
 
 export interface SendflowGroupRow {
@@ -30,6 +35,14 @@ export interface SendflowDailyPoint {
   clicks: number;
 }
 
+export interface SendflowTopLead {
+  phone: string;
+  score: number;
+  rank: number;
+  buyerName: string | null;
+  isBuyer: boolean;
+}
+
 export interface SendflowGroupSummary {
   releaseName: string | null;
   totalGroups: number;
@@ -43,6 +56,10 @@ export interface SendflowGroupSummary {
   clickToJoinRate: number | null;
   groups: SendflowGroupRow[];
   daily: SendflowDailyPoint[];
+  /** Top engajados da release de LIVE (lib de leadscoring nativa do SendFlow).
+   * Marca quem é comprador via match phone ↔ purchases.buyer_phone_e164. */
+  topLeads: SendflowTopLead[];
+  leadscoringReleaseName: string | null;
 }
 
 /**
@@ -121,6 +138,58 @@ export async function getSendflowGroupSummary(
   const removalsInPeriod = dailyRows.reduce((s, r) => s + r.removals, 0);
   const clicksInPeriod = dailyRows.reduce((s, r) => s + r.clicks, 0);
 
+  // 4) Top engajados — busca da release "LIVE" (leadscoring só faz sentido lá).
+  // Se a release LIVE não existe (Bruno não rodou sync ainda), retorna [].
+  const liveRelease = await db
+    .select({ id: sendflowReleases.id, name: sendflowReleases.name })
+    .from(sendflowReleases)
+    .where(
+      and(
+        eq(sendflowReleases.archived, false),
+        ilike(sendflowReleases.name, "%LIVE%"),
+      ),
+    )
+    .limit(1)
+    .then((rows) => rows[0] ?? null);
+
+  let topLeads: SendflowTopLead[] = [];
+  if (liveRelease) {
+    const rawTop = await db
+      .select({
+        phone: sendflowLeadscoring.phoneNormalized,
+        score: sendflowLeadscoring.score,
+        rank: sendflowLeadscoring.rank,
+        buyerName: purchases.buyerName,
+      })
+      .from(sendflowLeadscoring)
+      .leftJoin(
+        purchases,
+        and(
+          eq(purchases.buyerPhoneE164, sendflowLeadscoring.phoneNormalized),
+          eq(purchases.status, "approved"),
+        ),
+      )
+      .where(eq(sendflowLeadscoring.releaseId, liveRelease.id))
+      .orderBy(desc(sendflowLeadscoring.score))
+      .limit(20);
+
+    // LEFT JOIN com purchases pode duplicar leads (1 phone com várias compras).
+    // De-duplica por phone, prefere row com buyer_name.
+    const seen = new Map<string, SendflowTopLead>();
+    for (const r of rawTop) {
+      const existing = seen.get(r.phone);
+      if (existing && existing.buyerName) continue;
+      seen.set(r.phone, {
+        phone: r.phone,
+        score: r.score,
+        rank: r.rank,
+        buyerName: r.buyerName,
+        isBuyer: r.buyerName !== null,
+      });
+    }
+    topLeads = [...seen.values()].sort((a, b) => b.score - a.score);
+  }
+
   return {
     releaseName: release.name,
     totalGroups: groupRows.length,
@@ -140,6 +209,8 @@ export async function getSendflowGroupSummary(
       removals: r.removals,
       clicks: r.clicks,
     })),
+    topLeads,
+    leadscoringReleaseName: liveRelease?.name ?? null,
   };
 }
 
@@ -156,6 +227,8 @@ function emptyResult(releaseName: string | null): SendflowGroupSummary {
     clickToJoinRate: null,
     groups: [],
     daily: [],
+    topLeads: [],
+    leadscoringReleaseName: null,
   };
 }
 

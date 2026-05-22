@@ -11,7 +11,14 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ExternalLink, Users, MousePointerClick, UserPlus } from "lucide-react";
+import {
+  ExternalLink,
+  Users,
+  MousePointerClick,
+  UserPlus,
+  Flame,
+  ShoppingCart,
+} from "lucide-react";
 import { fmt } from "./format";
 import type { SendflowGroupSummary } from "@/lib/queries/sendflow";
 
@@ -174,7 +181,7 @@ export function SendflowGroupPanel({ data }: Props) {
 
         <div className="rounded-lg border border-border/60 bg-card p-5 flex flex-col">
           <div className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground mb-3">
-            Grupos
+            Grupos da campanha
           </div>
           <div className="space-y-2 max-h-[290px] overflow-y-auto pr-1">
             {data.groups.map((g) => (
@@ -215,8 +222,83 @@ export function SendflowGroupPanel({ data }: Props) {
           </div>
         </div>
       </div>
+
+      {data.topLeads.length > 0 ? <TopLeadsPanel data={data} /> : null}
     </div>
   );
+}
+
+function TopLeadsPanel({ data }: { data: SendflowGroupSummary }) {
+  const buyersInTop = data.topLeads.filter((l) => l.isBuyer).length;
+  return (
+    <div className="rounded-lg border border-border/60 bg-card p-5">
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <Flame className="h-4 w-4 text-amber-400" />
+          <span className="text-[11px] uppercase tracking-[0.12em] text-muted-foreground">
+            Top engajados
+          </span>
+          {data.leadscoringReleaseName ? (
+            <span className="text-[11px] text-muted-foreground normal-case">
+              · {data.leadscoringReleaseName}
+            </span>
+          ) : null}
+        </div>
+        <div className="text-[11px] text-muted-foreground">
+          <span className="text-emerald-400 font-medium">{buyersInTop}</span> de{" "}
+          {data.topLeads.length} são compradores
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {data.topLeads.slice(0, 20).map((lead) => (
+          <div
+            key={lead.phone}
+            className="flex items-center justify-between gap-3 py-2 px-3 rounded border border-border/30 bg-card/30"
+          >
+            <div className="flex items-center gap-2 min-w-0 flex-1">
+              <span className="text-[10px] text-muted-foreground tabular-nums w-5 shrink-0">
+                #{lead.rank}
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="text-xs font-medium text-foreground truncate flex items-center gap-1.5">
+                  {lead.buyerName ?? phoneShort(lead.phone)}
+                  {lead.isBuyer ? (
+                    <span title="É comprador do Desafio">
+                      <ShoppingCart className="h-3 w-3 text-emerald-400 shrink-0" />
+                    </span>
+                  ) : null}
+                </div>
+                <div className="text-[10px] text-muted-foreground truncate">
+                  {lead.isBuyer ? phoneShort(lead.phone) : "lead — sem compra"}
+                </div>
+              </div>
+            </div>
+            <div className="text-right shrink-0">
+              <div className="text-sm font-bold tabular-nums text-amber-400">
+                {lead.score.toLocaleString("pt-BR")}
+              </div>
+              <div className="text-[9px] uppercase tracking-wider text-muted-foreground">
+                score
+              </div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function phoneShort(e164: string): string {
+  // 5511987654321 → +55 11 98765-4321
+  if (e164.length < 12) return `+${e164}`;
+  const cc = e164.slice(0, 2);
+  const ddd = e164.slice(2, 4);
+  const rest = e164.slice(4);
+  if (rest.length === 9) {
+    return `+${cc} ${ddd} ${rest.slice(0, 5)}-${rest.slice(5)}`;
+  }
+  return `+${cc} ${ddd} ${rest.slice(0, -4)}-${rest.slice(-4)}`;
 }
 
 function KpiCard({

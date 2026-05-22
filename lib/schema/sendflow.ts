@@ -55,6 +55,47 @@ export const sendflowReleases = pgTable(
  * e idempotentemente atualiza. SendFlow não tem versionamento, então
  * a estratégia é "sempre confiar no último GET".
  * ──────────────────────────────────────────────────────────────────────── */
+/* ────────────────────────────────────────────────────────────────────────
+ * Lead scoring por release (engajamento agregado pelo SendFlow).
+ *
+ * GET /releases/{id}/leadscoring/download devolve URL Firebase com CSV:
+ *   Posição;Número;Score
+ *   1;5521996618758;11600
+ *
+ * Re-baixado a cada sync diário (re-rank pode mudar). Admins filtrados
+ * via lib/sendflow/admins. Unique por (release, phone) — upsert atualiza
+ * score/rank/fetched_at.
+ *
+ * Rate limit do download é apertado (~10min entre calls). Cron diário
+ * funciona, mas teste local é lento.
+ * ──────────────────────────────────────────────────────────────────────── */
+export const sendflowLeadscoring = pgTable(
+  "sendflow_leadscoring",
+  {
+    id: bigserial("id", { mode: "number" }).primaryKey(),
+    releaseId: bigint("release_id", { mode: "number" })
+      .notNull()
+      .references(() => sendflowReleases.id, { onDelete: "cascade" }),
+    phoneNormalized: text("phone_normalized").notNull(),
+    score: integer("score").notNull(),
+    rank: integer("rank").notNull(),
+    fetchedAt: timestamp("fetched_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (t) => [
+    uniqueIndex("sendflow_leadscoring_release_phone_uq").on(
+      t.releaseId,
+      t.phoneNormalized,
+    ),
+    index("sendflow_leadscoring_score_idx").on(t.releaseId, t.score),
+    index("sendflow_leadscoring_phone_idx").on(t.phoneNormalized),
+  ],
+);
+
 export const sendflowAnalyticsDaily = pgTable(
   "sendflow_analytics_daily",
   {

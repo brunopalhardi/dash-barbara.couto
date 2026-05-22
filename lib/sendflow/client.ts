@@ -97,10 +97,41 @@ async function request<T>(path: string, token: string): Promise<T> {
   throw new SendflowApiError(`sendflow ${path}: retries exhausted`, 0);
 }
 
+export interface SendflowLeadscoreRow {
+  rank: number;
+  phone: string;
+  score: number;
+}
+
 export interface SendflowClient {
   getReleases(): Promise<SendflowRelease[]>;
   getGroups(releaseId: string): Promise<SendflowGroup[]>;
   getAnalytics(releaseId: string): Promise<SendflowAnalytics>;
+  /**
+   * Devolve leadscoring agregado (rank + score por telefone). 2 hops:
+   * primeiro GET /leadscoring/download retorna URL Firebase, depois GET
+   * nessa URL traz o CSV. Retorna [] se release não tem leadscoring.
+   *
+   * Rate limit MUITO apertado (~10min). Usar com moderação.
+   */
+  getLeadscoring(releaseId: string): Promise<SendflowLeadscoreRow[]>;
+}
+
+function parseLeadscoringCsv(text: string): SendflowLeadscoreRow[] {
+  const clean = text.replace(/^﻿/, "");
+  const lines = clean.split(/\r?\n/).filter((l) => l.trim().length > 0);
+  if (lines.length < 2) return [];
+  const out: SendflowLeadscoreRow[] = [];
+  for (const line of lines.slice(1)) {
+    const parts = line.split(";");
+    if (parts.length < 3) continue;
+    const rank = Number(parts[0]);
+    const phone = parts[1].trim();
+    const score = Number(parts[2]);
+    if (!Number.isFinite(rank) || !phone || !Number.isFinite(score)) continue;
+    out.push({ rank, phone, score });
+  }
+  return out;
 }
 
 export function createSendflowClient(token: string): SendflowClient {
@@ -110,6 +141,36 @@ export function createSendflowClient(token: string): SendflowClient {
       request<SendflowGroup[]>(`/releases/${releaseId}/groups`, token),
     getAnalytics: (releaseId) =>
       request<SendflowAnalytics>(`/releases/${releaseId}/analytics`, token),
+    getLeadscoring: async (releaseId) => {
+      // 1) Pede a URL Firebase
+      const urlRes = await fetch(
+        `${BASE_URL}/releases/${releaseId}/leadscoring/download`,
+        {
+          headers: { Authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+        },
+      );
+      if (!urlRes.ok) {
+        const body = await urlRes.text().catch(() => "");
+        throw new SendflowApiError(
+          `sendflow leadscoring/download ${releaseId}: ${urlRes.status} ${body.slice(0, 200)}`,
+          urlRes.status,
+        );
+      }
+      const firebaseUrl = (await urlRes.text()).trim();
+      if (!firebaseUrl.startsWith("http")) return [];
+      // 2) Baixa o CSV
+      const csvRes = await fetch(firebaseUrl, {
+        signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      });
+      if (!csvRes.ok) {
+        throw new SendflowApiError(
+          `firebase leadscoring csv: ${csvRes.status}`,
+          csvRes.status,
+        );
+      }
+      return parseLeadscoringCsv(await csvRes.text());
+    },
   };
 }
 

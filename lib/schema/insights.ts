@@ -12,6 +12,22 @@ import {
 } from "drizzle-orm/pg-core";
 import { ads } from "./meta";
 
+/**
+ * Pixel events agregados por ad/dia, armazenados no JSON `conversions`.
+ * Todas as chaves são opcionais — rows antigas (pré-2026-05-27) podem não
+ * ter `landing_page_view` e `initiate_checkout`; backfill via syncMeta
+ * mode=backfill popula retroativamente.
+ */
+export type AdConversions = {
+  lead?: number;
+  purchase?: number;
+  revenue?: number;
+  follow?: number;
+  engagement?: number;
+  landing_page_view?: number;
+  initiate_checkout?: number;
+};
+
 export const adInsightsDaily = pgTable(
   "ad_insights_daily",
   {
@@ -34,8 +50,7 @@ export const adInsightsDaily = pgTable(
     videoP50: integer("video_p50"),
     videoP75: integer("video_p75"),
     videoP95: integer("video_p95"),
-    conversions:
-      jsonb("conversions").$type<Record<string, number>>().default({}),
+    conversions: jsonb("conversions").$type<AdConversions>().default({}),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

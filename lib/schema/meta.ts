@@ -140,6 +140,7 @@ export const ads = pgTable(
       { onDelete: "set null" },
     ),
     previewUrl: text("preview_url"),
+    landingUrl: text("landing_url"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

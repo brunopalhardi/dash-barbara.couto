@@ -1,7 +1,7 @@
 import { eq, inArray, and, lt } from "drizzle-orm";
 import { db as defaultDb } from "@/lib/db";
 import { adAccounts, campaigns, adsets, ads, creatives } from "@/lib/schema/meta";
-import { adInsightsDaily } from "@/lib/schema/insights";
+import { adInsightsDaily, type AdConversions } from "@/lib/schema/insights";
 import { syncJobs } from "@/lib/schema/sync";
 import type { MetaClient } from "@/lib/meta/client";
 import type { DatePreset, MetaCreative, MetaInsight, MetaInsightAction } from "@/lib/meta/types";
@@ -130,7 +130,7 @@ function findVideoView(actions: MetaInsightAction[] | undefined): number | null 
   return Number.isFinite(n) ? n : null;
 }
 
-function extractConversions(insight: MetaInsight): Record<string, number> {
+export function extractConversions(insight: MetaInsight): AdConversions {
   const isLead = (t: string) =>
     t === "lead" ||
     t.endsWith(".lead") ||
@@ -153,12 +153,28 @@ function extractConversions(insight: MetaInsight): Record<string, number> {
     t === "post_save" ||
     t === "page_engagement";
 
+  // LandingPageView vem em action_type único; somar é seguro.
+  const isLandingPageView = (t: string) =>
+    t === "landing_page_view" ||
+    t === "offsite_conversion.fb_pixel_view_content";
+
+  // InitiateCheckout sofre o mesmo problema do purchase: Meta reporta o
+  // MESMO evento em vários action_type ao mesmo tempo (omni/offsite/pixel).
+  // pickByPriority pega o primeiro disponível pela ordem — evita dedup.
+  const checkoutMatchers = [
+    (t: string) => t === "omni_initiated_checkout",
+    (t: string) => t === "offsite_conversion.fb_pixel_initiate_checkout",
+    (t: string) => t === "initiate_checkout",
+  ];
+
   return {
     lead: sumActions(insight.actions, isLead),
     purchase: pickByPriority(insight.actions, purchaseMatchers),
     revenue: pickByPriority(insight.action_values, purchaseMatchers),
     follow: sumActions(insight.actions, isFollow),
     engagement: sumActions(insight.actions, isEngagement),
+    landing_page_view: sumActions(insight.actions, isLandingPageView),
+    initiate_checkout: pickByPriority(insight.actions, checkoutMatchers),
   };
 }
 

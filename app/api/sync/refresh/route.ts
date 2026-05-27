@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createMetaClient } from "@/lib/meta/client";
-import { syncMeta } from "@/lib/sync/syncMeta";
+import { syncMeta, type SyncMode } from "@/lib/sync/syncMeta";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -13,6 +13,12 @@ async function isAuthorized(req: NextRequest): Promise<boolean> {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   return !!user;
+}
+
+function parseMode(req: NextRequest): SyncMode {
+  const v = req.nextUrl.searchParams.get("mode");
+  if (v === "backfill" || v === "manual" || v === "daily") return v;
+  return "daily";
 }
 
 export async function POST(req: NextRequest) {
@@ -27,7 +33,7 @@ export async function POST(req: NextRequest) {
     token,
     graphVersion: process.env.META_GRAPH_VERSION,
   });
-  const result = await syncMeta({ mode: "daily", client });
+  const result = await syncMeta({ mode: parseMode(req), client });
   return NextResponse.json(result);
 }
 

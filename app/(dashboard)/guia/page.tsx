@@ -21,6 +21,16 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { TopCreativesGrid } from "@/components/dashboard/top-creatives-grid";
+import { FunnelTableDaily } from "@/components/dashboard/funnel-table-daily";
+import { FunnelTableCampaign } from "@/components/dashboard/funnel-table-campaign";
+import { FunnelTableCreative } from "@/components/dashboard/funnel-table-creative";
+import { FunnelTablePage } from "@/components/dashboard/funnel-table-page";
+import {
+  getCampaignFunnel,
+  getCreativeFunnel,
+  getDailyFunnel,
+  getPageFunnel,
+} from "@/lib/queries/funnel";
 import type { DateRange, DailyPoint } from "@/lib/queries/dashboard";
 import type { DailyPurchasePoint } from "@/lib/queries/purchases";
 
@@ -75,6 +85,7 @@ export default async function GuiaPage({
     purchaseCount, revenueHot, dailyHot, dailyMeta,
     prevKpis, prevPurchaseCount, prevRevenueHot, prevDailyHot, prevDailyMeta,
     buyers,
+    dailyFunnel, campaignFunnel, creativeFunnel, pageFunnel,
   ] = await Promise.all([
     getKpis("guia", currentRange),
     getTopAds("guia", currentRange, { limit: 5, orderBy: "spend" }),
@@ -88,6 +99,10 @@ export default async function GuiaPage({
     compare ? getDailyPurchaseSeries("guia", prevRange) : Promise.resolve([]),
     compare ? getDailySeries("guia", prevRange) : Promise.resolve([]),
     getBuyersForCycle("guia", currentRange),
+    getDailyFunnel("guia", currentRange),
+    getCampaignFunnel("guia", currentRange),
+    getCreativeFunnel("guia", currentRange, 50),
+    getPageFunnel("guia", currentRange),
   ]);
 
   const currentDaily = buildDailyPoints(currentRange, dailyHot, dailyMeta);
@@ -195,6 +210,50 @@ export default async function GuiaPage({
         </CardHeader>
         <CardContent>
           <BuyersTable buyers={buyers} />
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border/60 mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Detalhamento diário do funil
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FunnelTableDaily rows={dailyFunnel} />
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border/60 mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Detalhamento por campanha
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FunnelTableCampaign rows={campaignFunnel} />
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border/60 mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Detalhamento por criativo · top 50 por gasto
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FunnelTableCreative rows={creativeFunnel} basePath="/guia/criativo" />
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border/60 mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Detalhamento por página de destino
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FunnelTablePage rows={pageFunnel} />
         </CardContent>
       </Card>
     </>

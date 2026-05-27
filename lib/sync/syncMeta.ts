@@ -1,4 +1,4 @@
-import { eq, inArray, and, lt } from "drizzle-orm";
+import { eq, inArray, and, lt, sql } from "drizzle-orm";
 import { db as defaultDb } from "@/lib/db";
 import { adAccounts, campaigns, adsets, ads, creatives } from "@/lib/schema/meta";
 import { adInsightsDaily, type AdConversions } from "@/lib/schema/insights";
@@ -472,6 +472,21 @@ export async function syncMeta(
     }
 
     results.push(r);
+  }
+
+  // Refresh materialized views após sync. CONCURRENTLY exige unique index
+  // — ver drizzle/manual/002_pixel_funnel_views.sql. Falha aqui não derruba
+  // o sync: só loga warning. O cron diário tenta de novo na próxima.
+  try {
+    await db.execute(sql`REFRESH MATERIALIZED VIEW CONCURRENTLY adset_insights_daily`);
+    await db.execute(sql`REFRESH MATERIALIZED VIEW CONCURRENTLY campaign_insights_daily`);
+  } catch (err) {
+    console.warn(
+      JSON.stringify({
+        msg: "mv_refresh_failed",
+        error: err instanceof Error ? err.message : String(err),
+      }),
+    );
   }
 
   const totalRows = results.reduce(

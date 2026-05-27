@@ -1,0 +1,558 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup · Detalhamento por Campanha · v2 (Inline Funnel Bars)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --bg: #09090b;
+    --bg-card: #141418;
+    --bg-card-hi: #1a1a1f;
+    --border: #232328;
+    --border-hi: #34343b;
+    --text: #fafafa;
+    --text-muted: #a1a1aa;
+    --text-faint: #52525b;
+    --winner: #34d399;
+    --winner-soft: rgba(52, 211, 153, 0.06);
+    --winner-border: rgba(52, 211, 153, 0.4);
+    --loser: #f87171;
+    --loser-soft: rgba(248, 113, 113, 0.06);
+    --loser-border: rgba(248, 113, 113, 0.4);
+    --warn: #fbbf24;
+    --warn-soft: rgba(251, 191, 36, 0.05);
+    --warn-border: rgba(251, 191, 36, 0.35);
+    /* Funnel stage colors — gradiente do mais largo (top funnel) ao mais estreito */
+    --stage-impr: #4f46e5;     /* indigo  */
+    --stage-click: #6366f1;    /* indigo lighter */
+    --stage-pv: #8b5cf6;       /* violet */
+    --stage-chkt: #a855f7;     /* purple */
+    --stage-buy: #34d399;      /* emerald — conversão */
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Geist', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.005em;
+  }
+
+  .mono {
+    font-family: 'Geist Mono', monospace;
+    font-feature-settings: 'tnum', 'zero';
+  }
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  .stat-label {
+    font-size: 9px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+  .stat-value-big {
+    font-family: 'Geist Mono', monospace;
+    font-feature-settings: 'tnum';
+    font-weight: 500;
+    font-size: 26px;
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+  .stat-value-mid {
+    font-family: 'Geist Mono', monospace;
+    font-feature-settings: 'tnum';
+    font-weight: 500;
+    font-size: 18px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    transition: border-color 180ms, background 180ms;
+  }
+  .card:hover { border-color: var(--border-hi); background: var(--bg-card-hi); }
+  .card.is-winner { border-color: var(--winner-border); }
+  .card.is-loser { border-color: var(--loser-border); }
+  .card.is-warn { border-color: var(--warn-border); }
+
+  /* Side accent bar instead of overlay */
+  .accent-rail {
+    position: absolute;
+    top: 0; bottom: 0; left: 0;
+    width: 3px;
+  }
+
+  .pip {
+    width: 5px; height: 5px; border-radius: 999px;
+    background: var(--winner);
+    box-shadow: 0 0 5px var(--winner);
+    display: inline-block;
+  }
+  .pip-off { background: var(--text-faint); box-shadow: none; }
+
+  .meta {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: var(--text-faint);
+    text-transform: lowercase;
+  }
+  .tag {
+    font-family: 'Geist Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 0.08em;
+    font-weight: 500;
+    padding: 2px 5px;
+    border-radius: 3px;
+    text-transform: uppercase;
+  }
+  .rule {
+    height: 1px;
+    background: linear-gradient(90deg, var(--border) 0%, transparent 100%);
+  }
+
+  /* Funnel bar stage */
+  .funnel-stage {
+    height: 32px;
+    position: relative;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    padding: 4px 6px;
+    border-radius: 3px;
+    overflow: hidden;
+    transition: opacity 150ms;
+  }
+  .funnel-stage::before {
+    content: "";
+    position: absolute; inset: 0;
+    background: var(--stage-bg, var(--stage-impr));
+    opacity: 0.18;
+    z-index: 0;
+  }
+  .funnel-stage::after {
+    content: "";
+    position: absolute; left: 0; right: 0; bottom: 0;
+    height: var(--fill, 100%);
+    background: linear-gradient(180deg, transparent, var(--stage-bg, var(--stage-impr)));
+    opacity: 0.6;
+    z-index: 0;
+  }
+  .funnel-stage > .stage-content {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 1px;
+  }
+  .funnel-stage .stage-value {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text);
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+  .funnel-stage .stage-drop {
+    font-family: 'Geist Mono', monospace;
+    font-size: 8px;
+    color: var(--text-muted);
+    letter-spacing: 0.04em;
+    line-height: 1;
+  }
+</style>
+</head>
+<body class="min-h-screen">
+
+<main class="max-w-[1400px] mx-auto px-6 md:px-12 py-10">
+
+  <header class="mb-8">
+    <div class="flex items-end justify-between gap-6 mb-4">
+      <div>
+        <div class="meta mb-2">por campanha · funil visual</div>
+        <h1 class="text-3xl md:text-4xl font-medium leading-tight tracking-tight">
+          Detalhamento por campanha
+        </h1>
+        <p class="text-sm text-[var(--text-muted)] mt-3 max-w-xl">
+          Cada estágio do funil é uma barra. Largura = proporção do estágio anterior. Onde a barra encolhe muito, o funil vaza.
+        </p>
+      </div>
+      <div class="text-right shrink-0 hidden md:block">
+        <div class="meta">27 mai → 27 mai</div>
+        <div class="text-sm text-[var(--text-muted)] mt-1">
+          <span class="mono tabular">8</span> campanhas · <span class="mono tabular">10</span> compras
+        </div>
+      </div>
+    </div>
+    <div class="rule"></div>
+  </header>
+
+  <!-- Funnel legend -->
+  <section class="mb-6 flex items-center gap-4 flex-wrap text-xs">
+    <div class="flex items-center gap-1.5">
+      <span class="w-3 h-3 rounded-sm" style="background: var(--stage-impr); opacity: 0.6;"></span>
+      <span class="meta">impressões</span>
+    </div>
+    <span class="text-[var(--text-faint)]">→</span>
+    <div class="flex items-center gap-1.5">
+      <span class="w-3 h-3 rounded-sm" style="background: var(--stage-click); opacity: 0.6;"></span>
+      <span class="meta">cliques</span>
+    </div>
+    <span class="text-[var(--text-faint)]">→</span>
+    <div class="flex items-center gap-1.5">
+      <span class="w-3 h-3 rounded-sm" style="background: var(--stage-pv); opacity: 0.6;"></span>
+      <span class="meta">pageviews</span>
+    </div>
+    <span class="text-[var(--text-faint)]">→</span>
+    <div class="flex items-center gap-1.5">
+      <span class="w-3 h-3 rounded-sm" style="background: var(--stage-chkt); opacity: 0.6;"></span>
+      <span class="meta">checkouts</span>
+    </div>
+    <span class="text-[var(--text-faint)]">→</span>
+    <div class="flex items-center gap-1.5">
+      <span class="w-3 h-3 rounded-sm" style="background: var(--stage-buy); opacity: 0.6;"></span>
+      <span class="meta">compras</span>
+    </div>
+  </section>
+
+  <!-- Campaign rows -->
+  <section class="space-y-2">
+
+    <!-- WINNER -->
+    <article class="card rounded-md is-winner">
+      <div class="accent-rail" style="background: var(--winner);"></div>
+      <div class="relative grid grid-cols-[280px_1fr_180px] items-center gap-4 pl-5 pr-5 py-4">
+        <!-- Identity -->
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="pip"></span>
+            <span class="text-[10px] tracking-wider uppercase text-[var(--text-muted)] font-medium">Ativo</span>
+            <div class="tag" style="background: rgba(52, 211, 153, 0.18); color: var(--winner);">↑ MELHOR CPA</div>
+          </div>
+          <h3 class="font-medium leading-tight tracking-tight truncate" title="B-PERPETUO-GUIA-F-V2-ADV VD CBO">
+            B-PERPETUO-GUIA-F-V2-ADV VD CBO
+          </h3>
+          <div class="meta mt-1">advantage+ · 2 cj · 3 ads</div>
+        </div>
+
+        <!-- Funnel bars -->
+        <div class="grid grid-cols-5 gap-1.5">
+          <div class="funnel-stage" style="--stage-bg: var(--stage-impr); --fill: 100%;">
+            <div class="stage-content">
+              <span class="stage-value">3.362</span>
+              <span class="stage-drop">100%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-click); --fill: 70%;">
+            <div class="stage-content">
+              <span class="stage-value">214</span>
+              <span class="stage-drop">6,4%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-pv); --fill: 55%;">
+            <div class="stage-content">
+              <span class="stage-value">116</span>
+              <span class="stage-drop">54%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-chkt); --fill: 30%;">
+            <div class="stage-content">
+              <span class="stage-value">4</span>
+              <span class="stage-drop">3,4%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-buy); --fill: 80%;">
+            <div class="stage-content">
+              <span class="stage-value text-[var(--winner)]">2</span>
+              <span class="stage-drop">50%</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Hero numbers -->
+        <div class="text-right">
+          <div class="stat-label">CPA</div>
+          <div class="stat-value-big text-[var(--winner)] mt-1">R$ 115</div>
+          <div class="text-[10px] mono tabular text-[var(--text-muted)] mt-1">R$ 230,21 gastos</div>
+        </div>
+      </div>
+    </article>
+
+    <!-- LOSER -->
+    <article class="card rounded-md is-loser">
+      <div class="accent-rail" style="background: var(--loser);"></div>
+      <div class="relative grid grid-cols-[280px_1fr_180px] items-center gap-4 pl-5 pr-5 py-4">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="pip"></span>
+            <span class="text-[10px] tracking-wider uppercase text-[var(--text-muted)] font-medium">Ativo</span>
+            <div class="tag" style="background: rgba(248, 113, 113, 0.18); color: var(--loser);">↓ PIOR CPA</div>
+          </div>
+          <h3 class="font-medium leading-tight tracking-tight truncate">
+            B-PERPETUO-GUIA-F-EXAUSTÃO
+          </h3>
+          <div class="meta mt-1">advantage+ · 5 cj · 22 ads</div>
+        </div>
+
+        <div class="grid grid-cols-5 gap-1.5">
+          <div class="funnel-stage" style="--stage-bg: var(--stage-impr); --fill: 100%;">
+            <div class="stage-content">
+              <span class="stage-value">22.330</span>
+              <span class="stage-drop">100%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-click); --fill: 75%;">
+            <div class="stage-content">
+              <span class="stage-value">1.563</span>
+              <span class="stage-drop">7,0%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-pv); --fill: 60%;">
+            <div class="stage-content">
+              <span class="stage-value">649</span>
+              <span class="stage-drop">42%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-chkt); --fill: 20%;">
+            <div class="stage-content">
+              <span class="stage-value">29</span>
+              <span class="stage-drop">4,5%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-buy); --fill: 35%;">
+            <div class="stage-content">
+              <span class="stage-value text-[var(--loser)]">8</span>
+              <span class="stage-drop">28%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-right">
+          <div class="stat-label">CPA</div>
+          <div class="stat-value-big text-[var(--loser)] mt-1">R$ 119</div>
+          <div class="text-[10px] mono tabular text-[var(--text-muted)] mt-1">R$ 956,93 gastos</div>
+        </div>
+      </div>
+    </article>
+
+    <!-- WARN -->
+    <article class="card rounded-md is-warn">
+      <div class="accent-rail" style="background: var(--warn);"></div>
+      <div class="relative grid grid-cols-[280px_1fr_180px] items-center gap-4 pl-5 pr-5 py-4">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="pip"></span>
+            <span class="text-[10px] tracking-wider uppercase text-[var(--text-muted)] font-medium">Ativo</span>
+            <div class="tag" style="background: rgba(251, 191, 36, 0.18); color: var(--warn);">⚠ 0 COMPRAS</div>
+          </div>
+          <h3 class="font-medium leading-tight tracking-tight truncate">
+            B-PERPETUO-GUIA-F-Remarketing 1
+          </h3>
+          <div class="meta mt-1">retargeting · 1 cj · 3 ads</div>
+        </div>
+
+        <div class="grid grid-cols-5 gap-1.5">
+          <div class="funnel-stage" style="--stage-bg: var(--stage-impr); --fill: 100%;">
+            <div class="stage-content">
+              <span class="stage-value">1.794</span>
+              <span class="stage-drop">100%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-click); --fill: 80%;">
+            <div class="stage-content">
+              <span class="stage-value">136</span>
+              <span class="stage-drop">7,6%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-pv); --fill: 35%;">
+            <div class="stage-content">
+              <span class="stage-value">34</span>
+              <span class="stage-drop">25%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-chkt); --fill: 100%;">
+            <div class="stage-content">
+              <span class="stage-value text-[var(--warn)]">43</span>
+              <span class="stage-drop">126%</span>
+            </div>
+          </div>
+          <div class="funnel-stage opacity-30" style="--stage-bg: var(--stage-buy); --fill: 0%;">
+            <div class="stage-content">
+              <span class="stage-value text-[var(--text-faint)]">0</span>
+              <span class="stage-drop">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-right">
+          <div class="stat-label">CPA</div>
+          <div class="stat-value-big text-[var(--text-faint)] mt-1">—</div>
+          <div class="text-[10px] mono tabular text-[var(--text-muted)] mt-1">R$ 121,97 gastos</div>
+        </div>
+      </div>
+    </article>
+
+    <!-- NEUTRAL -->
+    <article class="card rounded-md">
+      <div class="accent-rail" style="background: var(--border);"></div>
+      <div class="relative grid grid-cols-[280px_1fr_180px] items-center gap-4 pl-5 pr-5 py-4">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="pip"></span>
+            <span class="text-[10px] tracking-wider uppercase text-[var(--text-muted)] font-medium">Ativo</span>
+          </div>
+          <h3 class="font-medium leading-tight tracking-tight truncate">
+            B-PERPETUO-GUIA-F-EMOCIONAL
+          </h3>
+          <div class="meta mt-1">advantage+ · 1 cj · 5 ads</div>
+        </div>
+
+        <div class="grid grid-cols-5 gap-1.5">
+          <div class="funnel-stage" style="--stage-bg: var(--stage-impr); --fill: 100%;">
+            <div class="stage-content">
+              <span class="stage-value">2.418</span>
+              <span class="stage-drop">100%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-click); --fill: 90%;">
+            <div class="stage-content">
+              <span class="stage-value">222</span>
+              <span class="stage-drop">9,2%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-pv); --fill: 45%;">
+            <div class="stage-content">
+              <span class="stage-value">49</span>
+              <span class="stage-drop">22%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-chkt); --fill: 15%;">
+            <div class="stage-content">
+              <span class="stage-value">1</span>
+              <span class="stage-drop">2,0%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-buy); --fill: 100%;">
+            <div class="stage-content">
+              <span class="stage-value">1</span>
+              <span class="stage-drop">100%</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-right">
+          <div class="stat-label">CPA</div>
+          <div class="stat-value-big text-[var(--warn)] mt-1">R$ 235</div>
+          <div class="text-[10px] mono tabular text-[var(--text-muted)] mt-1">R$ 235,80 gastos</div>
+        </div>
+      </div>
+    </article>
+
+    <!-- PAUSED -->
+    <article class="card rounded-md opacity-60">
+      <div class="accent-rail" style="background: var(--border);"></div>
+      <div class="relative grid grid-cols-[280px_1fr_180px] items-center gap-4 pl-5 pr-5 py-4">
+        <div class="min-w-0">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="pip pip-off"></span>
+            <span class="text-[10px] tracking-wider uppercase text-[var(--text-faint)] font-medium">Pausado</span>
+          </div>
+          <h3 class="font-medium leading-tight tracking-tight truncate text-[var(--text-muted)]">
+            B-PERPETUO-GUIA-F-V1-ADV IMG CBO
+          </h3>
+          <div class="meta mt-1">advantage+ · 1 cj · 4 ads · pausado em 24/mai</div>
+        </div>
+
+        <div class="grid grid-cols-5 gap-1.5">
+          <div class="funnel-stage" style="--stage-bg: var(--stage-impr); --fill: 50%;">
+            <div class="stage-content">
+              <span class="stage-value">1.112</span>
+              <span class="stage-drop">100%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-click); --fill: 60%;">
+            <div class="stage-content">
+              <span class="stage-value">61</span>
+              <span class="stage-drop">5,5%</span>
+            </div>
+          </div>
+          <div class="funnel-stage" style="--stage-bg: var(--stage-pv); --fill: 30%;">
+            <div class="stage-content">
+              <span class="stage-value">13</span>
+              <span class="stage-drop">21%</span>
+            </div>
+          </div>
+          <div class="funnel-stage opacity-30" style="--stage-bg: var(--stage-chkt); --fill: 0%;">
+            <div class="stage-content">
+              <span class="stage-value text-[var(--text-faint)]">0</span>
+              <span class="stage-drop">—</span>
+            </div>
+          </div>
+          <div class="funnel-stage opacity-30" style="--stage-bg: var(--stage-buy); --fill: 0%;">
+            <div class="stage-content">
+              <span class="stage-value text-[var(--text-faint)]">0</span>
+              <span class="stage-drop">—</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="text-right">
+          <div class="stat-label">CPA</div>
+          <div class="stat-value-big text-[var(--text-faint)] mt-1">—</div>
+          <div class="text-[10px] mono tabular text-[var(--text-muted)] mt-1">R$ 39,94 gastos</div>
+        </div>
+      </div>
+    </article>
+
+  </section>
+
+  <!-- Totals strip -->
+  <section class="mt-6 card rounded-md p-5">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-6">
+      <div>
+        <div class="stat-label">Total Compras</div>
+        <div class="stat-value-mid mt-1.5">10</div>
+      </div>
+      <div>
+        <div class="stat-label">CPA Médio</div>
+        <div class="stat-value-mid mt-1.5">R$ 174,53</div>
+      </div>
+      <div>
+        <div class="stat-label">Gasto Total</div>
+        <div class="stat-value-mid mt-1.5">R$ 1.745</div>
+      </div>
+      <div>
+        <div class="stat-label">CTR Médio</div>
+        <div class="stat-value-mid mt-1.5">6,65%</div>
+      </div>
+      <div>
+        <div class="stat-label">Conn. Médio</div>
+        <div class="stat-value-mid mt-1.5">71,17%</div>
+      </div>
+      <div>
+        <div class="stat-label">CHKT→💰</div>
+        <div class="stat-value-mid mt-1.5">12,66%</div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="mt-10 pt-5 border-t border-[var(--border)]">
+    <p class="meta">v2 · funil visual inline · estágios coloridos por etapa · taxa de conversão entre estágios</p>
+  </footer>
+
+</main>
+
+</body>
+</html>

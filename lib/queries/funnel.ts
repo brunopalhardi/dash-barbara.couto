@@ -116,6 +116,9 @@ export interface CampaignFunnelRow {
   campaignId: number;
   campaignName: string;
   status: string;
+  objective: string | null;
+  adsetCount: number;
+  adCount: number;
   impressions: number;
   clicks: number;
   spend: number;
@@ -143,6 +146,9 @@ export async function getCampaignFunnel(
       campaignId: campaigns.id,
       campaignName: campaigns.name,
       status: campaigns.status,
+      objective: campaigns.objective,
+      adsetCount: sql<number>`count(distinct ${adsets.id})::int`,
+      adCount: sql<number>`count(distinct ${ads.id})::int`,
       impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
       clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
       spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
@@ -157,13 +163,16 @@ export async function getCampaignFunnel(
     .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
     .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
     .where(and(...conds))
-    .groupBy(campaigns.id, campaigns.name, campaigns.status)
+    .groupBy(campaigns.id, campaigns.name, campaigns.status, campaigns.objective)
     .orderBy(desc(sql`sum(${adInsightsDaily.spend})`));
 
   return rows.map((r) => ({
     campaignId: Number(r.campaignId),
     campaignName: String(r.campaignName),
     status: String(r.status),
+    objective: r.objective ?? null,
+    adsetCount: Number(r.adsetCount),
+    adCount: Number(r.adCount),
     impressions: Number(r.impressions),
     clicks: Number(r.clicks),
     spend: Number(r.spend),

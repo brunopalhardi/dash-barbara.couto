@@ -1,0 +1,478 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup · Detalhamento por Campanha · v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --bg: #09090b;
+    --bg-card: #141418;
+    --bg-card-hi: #1a1a1f;
+    --border: #232328;
+    --border-hi: #34343b;
+    --text: #fafafa;
+    --text-muted: #a1a1aa;
+    --text-faint: #52525b;
+    --winner: #34d399;
+    --winner-soft: rgba(52, 211, 153, 0.06);
+    --winner-border: rgba(52, 211, 153, 0.35);
+    --loser: #f87171;
+    --loser-soft: rgba(248, 113, 113, 0.06);
+    --loser-border: rgba(248, 113, 113, 0.35);
+    --warn: #fbbf24;
+    --warn-soft: rgba(251, 191, 36, 0.05);
+    --warn-border: rgba(251, 191, 36, 0.30);
+  }
+
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Geist', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.005em;
+  }
+
+  .mono {
+    font-family: 'Geist Mono', monospace;
+    font-feature-settings: 'tnum', 'zero';
+  }
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  .stat-label {
+    font-size: 10px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+  .stat-value-big {
+    font-family: 'Geist Mono', monospace;
+    font-feature-settings: 'tnum';
+    font-weight: 500;
+    font-size: 32px;
+    line-height: 1;
+    letter-spacing: -0.04em;
+  }
+  .stat-value-mid {
+    font-family: 'Geist Mono', monospace;
+    font-feature-settings: 'tnum';
+    font-weight: 500;
+    font-size: 18px;
+    line-height: 1;
+    letter-spacing: -0.02em;
+  }
+
+  /* Card */
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    position: relative;
+    overflow: hidden;
+    transition: border-color 180ms, background 180ms;
+  }
+  .card:hover { border-color: var(--border-hi); background: var(--bg-card-hi); }
+  .card.is-winner { border-color: var(--winner-border); }
+  .card.is-winner::before {
+    content: ""; position: absolute; inset: 0;
+    background: var(--winner-soft);
+    pointer-events: none;
+  }
+  .card.is-loser { border-color: var(--loser-border); }
+  .card.is-loser::before {
+    content: ""; position: absolute; inset: 0;
+    background: var(--loser-soft);
+    pointer-events: none;
+  }
+  .card.is-warn { border-color: var(--warn-border); }
+  .card.is-warn::before {
+    content: ""; position: absolute; inset: 0;
+    background: var(--warn-soft);
+    pointer-events: none;
+  }
+
+  .pip {
+    width: 6px; height: 6px; border-radius: 999px;
+    background: var(--winner);
+    box-shadow: 0 0 6px var(--winner);
+    display: inline-block;
+  }
+  .pip-off { background: var(--text-faint); box-shadow: none; }
+
+  .meta {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: var(--text-faint);
+    text-transform: lowercase;
+  }
+  .tag {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.06em;
+    font-weight: 500;
+    padding: 3px 6px;
+    border-radius: 4px;
+    text-transform: uppercase;
+  }
+  .rule {
+    height: 1px;
+    background: linear-gradient(90deg, var(--border) 0%, transparent 100%);
+  }
+
+  .perf-bar {
+    height: 2px;
+    background: rgba(255,255,255,0.04);
+    overflow: hidden;
+    border-radius: 999px;
+  }
+</style>
+</head>
+<body class="min-h-screen">
+
+<main class="max-w-[1400px] mx-auto px-6 md:px-12 py-10">
+
+  <header class="mb-8">
+    <div class="flex items-end justify-between gap-6 mb-4">
+      <div>
+        <div class="meta mb-2">por campanha · ordenado por gasto</div>
+        <h1 class="text-3xl md:text-4xl font-medium leading-tight tracking-tight">
+          Detalhamento por campanha
+        </h1>
+      </div>
+      <div class="text-right shrink-0 hidden md:block">
+        <div class="meta">27 mai → 27 mai</div>
+        <div class="text-sm text-[var(--text-muted)] mt-1">
+          <span class="mono tabular">8</span> campanhas
+          ·
+          <span class="mono tabular">R$ 1.745</span> gastos
+          ·
+          <span class="mono tabular">10</span> compras
+        </div>
+      </div>
+    </div>
+    <div class="rule"></div>
+  </header>
+
+  <!-- Highlights -->
+  <section class="grid grid-cols-1 md:grid-cols-3 gap-3 mb-8">
+    <div class="card rounded-md p-4 is-winner">
+      <div class="relative flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div class="stat-label">Melhor CPA</div>
+          <div class="stat-value-mid mt-2 text-[var(--winner)]">R$ 115,10</div>
+          <div class="text-xs text-[var(--text-muted)] mt-1.5 truncate">B-PERPETUO-GUIA-F-V2-ADV VD CBO</div>
+        </div>
+        <div class="tag" style="background: rgba(52, 211, 153, 0.12); color: var(--winner);">↑</div>
+      </div>
+    </div>
+    <div class="card rounded-md p-4 is-loser">
+      <div class="relative flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div class="stat-label">Pior CPA</div>
+          <div class="stat-value-mid mt-2 text-[var(--loser)]">R$ 119,62</div>
+          <div class="text-xs text-[var(--text-muted)] mt-1.5 truncate">B-PERPETUO-GUIA-F-EXAUSTÃO</div>
+        </div>
+        <div class="tag" style="background: rgba(248, 113, 113, 0.12); color: var(--loser);">↓</div>
+      </div>
+    </div>
+    <div class="card rounded-md p-4 is-warn">
+      <div class="relative flex items-start justify-between gap-3">
+        <div class="min-w-0">
+          <div class="stat-label">Maior gasto · 0 compras</div>
+          <div class="stat-value-mid mt-2 text-[var(--warn)]">R$ 235,80</div>
+          <div class="text-xs text-[var(--text-muted)] mt-1.5 truncate">B-PERPETUO-GUIA-F-EMOCIONAL</div>
+        </div>
+        <div class="tag" style="background: rgba(251, 191, 36, 0.12); color: var(--warn);">⚠</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Campaign list -->
+  <section class="space-y-3">
+
+    <!-- WINNER ROW -->
+    <article class="card rounded-md is-winner">
+      <div class="relative grid grid-cols-[1fr_auto_auto] items-stretch">
+        <!-- LEFT: name + meta -->
+        <div class="p-5 min-w-0 border-r border-[var(--border)]">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="pip"></span>
+            <span class="text-[10px] tracking-wider uppercase text-[var(--text-muted)] font-medium">Ativo</span>
+            <div class="tag" style="background: var(--winner); color: #042f2e;">↑ Melhor CPA</div>
+          </div>
+          <h3 class="font-medium leading-tight tracking-tight truncate" title="B-PERPETUO-GUIA-F-V2-ADV VD CBO">
+            B-PERPETUO-GUIA-F-V2-ADV VD CBO
+          </h3>
+          <div class="meta mt-1.5">advantage+ · 2 conjuntos · 3 anúncios</div>
+        </div>
+
+        <!-- MIDDLE: hero CPA + Compras -->
+        <div class="p-5 px-8 border-r border-[var(--border)] flex items-center gap-8">
+          <div>
+            <div class="stat-label">CPA</div>
+            <div class="stat-value-big text-[var(--winner)] mt-1.5">R$ 115,10</div>
+          </div>
+          <div>
+            <div class="stat-label">Compras</div>
+            <div class="stat-value-big mt-1.5">2</div>
+          </div>
+          <div>
+            <div class="stat-label">Gasto</div>
+            <div class="stat-value-big mt-1.5">R$ 230,21</div>
+          </div>
+        </div>
+
+        <!-- RIGHT: funnel rates -->
+        <div class="p-5 grid grid-cols-3 gap-x-6 gap-y-3">
+          <div>
+            <div class="stat-label">CTR</div>
+            <div class="mono tabular text-sm mt-1 font-medium">6,37%</div>
+          </div>
+          <div>
+            <div class="stat-label">CPC</div>
+            <div class="mono tabular text-sm mt-1 font-medium">R$ 1,08</div>
+          </div>
+          <div>
+            <div class="stat-label">Freq</div>
+            <div class="mono tabular text-sm mt-1 font-medium">1,27</div>
+          </div>
+          <div>
+            <div class="stat-label">Conn.</div>
+            <div class="mono tabular text-sm mt-1 font-medium">76,32%</div>
+          </div>
+          <div>
+            <div class="stat-label">LP→CHKT</div>
+            <div class="mono tabular text-sm mt-1 font-medium">3,45%</div>
+          </div>
+          <div>
+            <div class="stat-label">CHKT→💰</div>
+            <div class="mono tabular text-sm mt-1 font-medium text-[var(--winner)]">50,0%</div>
+          </div>
+        </div>
+      </div>
+      <!-- spend perf bar full width -->
+      <div class="perf-bar relative" style="border-radius: 0;">
+        <div style="width: 13%; height: 100%; background: var(--winner); opacity: 0.65;"></div>
+      </div>
+    </article>
+
+    <!-- LOSER ROW -->
+    <article class="card rounded-md is-loser">
+      <div class="relative grid grid-cols-[1fr_auto_auto] items-stretch">
+        <div class="p-5 min-w-0 border-r border-[var(--border)]">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="pip"></span>
+            <span class="text-[10px] tracking-wider uppercase text-[var(--text-muted)] font-medium">Ativo</span>
+            <div class="tag" style="background: var(--loser); color: #4c0519;">↓ Pior CPA</div>
+          </div>
+          <h3 class="font-medium leading-tight tracking-tight truncate" title="B-PERPETUO-GUIA-F-EXAUSTÃO">
+            B-PERPETUO-GUIA-F-EXAUSTÃO
+          </h3>
+          <div class="meta mt-1.5">advantage+ · 5 conjuntos · 22 anúncios</div>
+        </div>
+
+        <div class="p-5 px-8 border-r border-[var(--border)] flex items-center gap-8">
+          <div>
+            <div class="stat-label">CPA</div>
+            <div class="stat-value-big text-[var(--loser)] mt-1.5">R$ 119,62</div>
+          </div>
+          <div>
+            <div class="stat-label">Compras</div>
+            <div class="stat-value-big mt-1.5">8</div>
+          </div>
+          <div>
+            <div class="stat-label">Gasto</div>
+            <div class="stat-value-big mt-1.5">R$ 956,93</div>
+          </div>
+        </div>
+
+        <div class="p-5 grid grid-cols-3 gap-x-6 gap-y-3">
+          <div><div class="stat-label">CTR</div><div class="mono tabular text-sm mt-1 font-medium">7,00%</div></div>
+          <div><div class="stat-label">CPC</div><div class="mono tabular text-sm mt-1 font-medium">R$ 0,61</div></div>
+          <div><div class="stat-label">Freq</div><div class="mono tabular text-sm mt-1 font-medium">1,88</div></div>
+          <div><div class="stat-label">Conn.</div><div class="mono tabular text-sm mt-1 font-medium">74,43%</div></div>
+          <div><div class="stat-label">LP→CHKT</div><div class="mono tabular text-sm mt-1 font-medium">4,47%</div></div>
+          <div><div class="stat-label">CHKT→💰</div><div class="mono tabular text-sm mt-1 font-medium text-[var(--loser)]">27,6%</div></div>
+        </div>
+      </div>
+      <div class="perf-bar relative" style="border-radius: 0;">
+        <div style="width: 55%; height: 100%; background: var(--loser); opacity: 0.65;"></div>
+      </div>
+    </article>
+
+    <!-- NEUTRAL -->
+    <article class="card rounded-md">
+      <div class="relative grid grid-cols-[1fr_auto_auto] items-stretch">
+        <div class="p-5 min-w-0 border-r border-[var(--border)]">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="pip"></span>
+            <span class="text-[10px] tracking-wider uppercase text-[var(--text-muted)] font-medium">Ativo</span>
+          </div>
+          <h3 class="font-medium leading-tight tracking-tight truncate">
+            B-PERPETUO-GUIA-F-EMOCIONAL
+          </h3>
+          <div class="meta mt-1.5">advantage+ · 1 conjunto · 5 anúncios</div>
+        </div>
+
+        <div class="p-5 px-8 border-r border-[var(--border)] flex items-center gap-8">
+          <div>
+            <div class="stat-label">CPA</div>
+            <div class="stat-value-big text-[var(--warn)] mt-1.5">R$ 235,80</div>
+          </div>
+          <div>
+            <div class="stat-label">Compras</div>
+            <div class="stat-value-big mt-1.5">1</div>
+          </div>
+          <div>
+            <div class="stat-label">Gasto</div>
+            <div class="stat-value-big mt-1.5">R$ 235,80</div>
+          </div>
+        </div>
+
+        <div class="p-5 grid grid-cols-3 gap-x-6 gap-y-3">
+          <div><div class="stat-label">CTR</div><div class="mono tabular text-sm mt-1 font-medium">9,18%</div></div>
+          <div><div class="stat-label">CPC</div><div class="mono tabular text-sm mt-1 font-medium">R$ 0,37</div></div>
+          <div><div class="stat-label">Freq</div><div class="mono tabular text-sm mt-1 font-medium">1,25</div></div>
+          <div><div class="stat-label">Conn.</div><div class="mono tabular text-sm mt-1 font-medium">66,22%</div></div>
+          <div><div class="stat-label">LP→CHKT</div><div class="mono tabular text-sm mt-1 font-medium">2,04%</div></div>
+          <div><div class="stat-label">CHKT→💰</div><div class="mono tabular text-sm mt-1 font-medium">100%</div></div>
+        </div>
+      </div>
+      <div class="perf-bar relative" style="border-radius: 0;">
+        <div style="width: 14%; height: 100%; background: var(--text-muted); opacity: 0.4;"></div>
+      </div>
+    </article>
+
+    <!-- WARN — 0 purchases -->
+    <article class="card rounded-md is-warn">
+      <div class="relative grid grid-cols-[1fr_auto_auto] items-stretch">
+        <div class="p-5 min-w-0 border-r border-[var(--border)]">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="pip"></span>
+            <span class="text-[10px] tracking-wider uppercase text-[var(--text-muted)] font-medium">Ativo</span>
+            <div class="tag" style="background: var(--warn); color: #1c1917;">⚠ 0 compras</div>
+          </div>
+          <h3 class="font-medium leading-tight tracking-tight truncate">
+            B-PERPETUO-GUIA-F-Remarketing 1 (Checkout)
+          </h3>
+          <div class="meta mt-1.5">retargeting · 1 conjunto · 3 anúncios</div>
+        </div>
+
+        <div class="p-5 px-8 border-r border-[var(--border)] flex items-center gap-8">
+          <div>
+            <div class="stat-label">CPA</div>
+            <div class="stat-value-big text-[var(--text-faint)] mt-1.5">—</div>
+          </div>
+          <div>
+            <div class="stat-label">Compras</div>
+            <div class="stat-value-big text-[var(--text-faint)] mt-1.5">0</div>
+          </div>
+          <div>
+            <div class="stat-label">Gasto</div>
+            <div class="stat-value-big mt-1.5">R$ 121,97</div>
+          </div>
+        </div>
+
+        <div class="p-5 grid grid-cols-3 gap-x-6 gap-y-3">
+          <div><div class="stat-label">CTR</div><div class="mono tabular text-sm mt-1 font-medium">7,58%</div></div>
+          <div><div class="stat-label">CPC</div><div class="mono tabular text-sm mt-1 font-medium">R$ 0,90</div></div>
+          <div><div class="stat-label">Freq</div><div class="mono tabular text-sm mt-1 font-medium">1,23</div></div>
+          <div><div class="stat-label">Conn.</div><div class="mono tabular text-sm mt-1 font-medium">44,16%</div></div>
+          <div><div class="stat-label">LP→CHKT</div><div class="mono tabular text-sm mt-1 font-medium text-[var(--warn)]">126,5%</div></div>
+          <div><div class="stat-label">CHKT→💰</div><div class="mono tabular text-sm mt-1 font-medium text-[var(--text-faint)]">—</div></div>
+        </div>
+      </div>
+      <div class="perf-bar relative" style="border-radius: 0;">
+        <div style="width: 7%; height: 100%; background: var(--warn); opacity: 0.6;"></div>
+      </div>
+    </article>
+
+    <!-- PAUSED -->
+    <article class="card rounded-md opacity-70">
+      <div class="relative grid grid-cols-[1fr_auto_auto] items-stretch">
+        <div class="p-5 min-w-0 border-r border-[var(--border)]">
+          <div class="flex items-center gap-2 mb-1.5">
+            <span class="pip pip-off"></span>
+            <span class="text-[10px] tracking-wider uppercase text-[var(--text-faint)] font-medium">Pausado</span>
+          </div>
+          <h3 class="font-medium leading-tight tracking-tight truncate text-[var(--text-muted)]">
+            B-PERPETUO-GUIA-F-V1-ADV IMG CBO
+          </h3>
+          <div class="meta mt-1.5">advantage+ · 1 conjunto · 4 anúncios · pausado em 24/mai</div>
+        </div>
+
+        <div class="p-5 px-8 border-r border-[var(--border)] flex items-center gap-8">
+          <div>
+            <div class="stat-label">CPA</div>
+            <div class="stat-value-big text-[var(--text-faint)] mt-1.5">—</div>
+          </div>
+          <div>
+            <div class="stat-label">Compras</div>
+            <div class="stat-value-big text-[var(--text-faint)] mt-1.5">0</div>
+          </div>
+          <div>
+            <div class="stat-label">Gasto</div>
+            <div class="stat-value-big mt-1.5 text-[var(--text-muted)]">R$ 39,94</div>
+          </div>
+        </div>
+
+        <div class="p-5 grid grid-cols-3 gap-x-6 gap-y-3">
+          <div><div class="stat-label">CTR</div><div class="mono tabular text-sm mt-1">5,49%</div></div>
+          <div><div class="stat-label">CPC</div><div class="mono tabular text-sm mt-1">R$ 0,65</div></div>
+          <div><div class="stat-label">Freq</div><div class="mono tabular text-sm mt-1">1,24</div></div>
+          <div><div class="stat-label">Conn.</div><div class="mono tabular text-sm mt-1">59,09%</div></div>
+          <div><div class="stat-label">LP→CHKT</div><div class="mono tabular text-sm mt-1">0,00%</div></div>
+          <div><div class="stat-label">CHKT→💰</div><div class="mono tabular text-sm mt-1 text-[var(--text-faint)]">—</div></div>
+        </div>
+      </div>
+      <div class="perf-bar relative" style="border-radius: 0;">
+        <div style="width: 2%; height: 100%; background: var(--text-muted); opacity: 0.3;"></div>
+      </div>
+    </article>
+
+  </section>
+
+  <!-- Totals strip -->
+  <section class="mt-6 card rounded-md p-5 bg-[var(--bg-card)]">
+    <div class="grid grid-cols-2 md:grid-cols-6 gap-6">
+      <div>
+        <div class="stat-label">Total Compras</div>
+        <div class="stat-value-mid mt-1.5">10</div>
+      </div>
+      <div>
+        <div class="stat-label">CPA Médio</div>
+        <div class="stat-value-mid mt-1.5">R$ 174,53</div>
+      </div>
+      <div>
+        <div class="stat-label">Gasto Total</div>
+        <div class="stat-value-mid mt-1.5">R$ 1.745</div>
+      </div>
+      <div>
+        <div class="stat-label">CTR Médio</div>
+        <div class="stat-value-mid mt-1.5">6,65%</div>
+      </div>
+      <div>
+        <div class="stat-label">Conn. Médio</div>
+        <div class="stat-value-mid mt-1.5">71,17%</div>
+      </div>
+      <div>
+        <div class="stat-label">CHKT→💰</div>
+        <div class="stat-value-mid mt-1.5">12,66%</div>
+      </div>
+    </div>
+  </section>
+
+  <footer class="mt-10 pt-5 border-t border-[var(--border)]">
+    <p class="meta">v1 · campanha como row-card horizontal · 3 zonas (identidade · hero · funnel)</p>
+  </footer>
+
+</main>
+
+</body>
+</html>

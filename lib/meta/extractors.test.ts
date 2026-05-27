@@ -67,3 +67,40 @@ describe("extractLandingUrl", () => {
     expect(extractLandingUrl(creative)).toBe("https://fallback.lovable.app/");
   });
 });
+
+describe("extractLandingUrl — formats adicionais", () => {
+  it("extrai de template_data.link (carousel geral)", () => {
+    const c = extractLandingUrl({
+      id: "c1",
+      object_story_spec: { template_data: { link: "https://car-geral.lovable.app/" } },
+    });
+    expect(c).toBe("https://car-geral.lovable.app/");
+  });
+
+  it("extrai de template_data.call_to_action.value.link (carousel CTA)", () => {
+    const c = extractLandingUrl({
+      id: "c2",
+      object_story_spec: {
+        template_data: {
+          call_to_action: { type: "LEARN_MORE", value: { link: "https://car-cta.lovable.app/" } },
+        },
+      },
+    });
+    expect(c).toBe("https://car-cta.lovable.app/");
+  });
+
+  it("extrai de template_data.child_attachments[0].link (primeiro card)", () => {
+    const c = extractLandingUrl({
+      id: "c3",
+      object_story_spec: {
+        template_data: {
+          child_attachments: [
+            { link: "https://card1.lovable.app/" },
+            { link: "https://card2.lovable.app/" },
+          ],
+        },
+      },
+    });
+    expect(c).toBe("https://card1.lovable.app/");
+  });
+});

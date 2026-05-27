@@ -76,10 +76,17 @@ export interface MetaVideoData {
   video_id?: string;
 }
 
+export interface MetaTemplateData {
+  link?: string;
+  call_to_action?: MetaVideoCTA;
+  child_attachments?: Array<{ link?: string }>;
+}
+
 export interface MetaObjectStorySpec {
   page_id?: string;
   link_data?: MetaLinkData;
   video_data?: MetaVideoData;
+  template_data?: MetaTemplateData;
 }
 
 export interface MetaAssetFeedLinkUrl {

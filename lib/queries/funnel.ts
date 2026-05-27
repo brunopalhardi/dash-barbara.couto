@@ -1,0 +1,266 @@
+import { and, eq, gte, like, lte, or, sql, type SQL, desc } from "drizzle-orm";
+import { db } from "@/lib/db";
+import {
+  adAccounts,
+  adInsightsDaily,
+  ads,
+  adsets,
+  campaigns,
+  creatives,
+} from "@/lib/schema";
+import { getProduct, type Product, type ProductSlug } from "@/lib/products";
+import type { DateRange } from "./dashboard";
+
+/* ─── product scope (replicado de dashboard.ts para evitar export interno) ── */
+
+function extractAlternationTokens(re: RegExp): string[] {
+  const src = re.source;
+  const parts = src.split("|").map((p) => p.replace(/^\\/, "").replace(/\$$/, ""));
+  return parts
+    .map((p) => p.replace(/[.*+?(){}[\]\\^$|]/g, " ").trim())
+    .filter(Boolean);
+}
+
+function productScopeWhere(product: Product): SQL[] {
+  const where: SQL[] = [];
+  if (product.metaAccountId) {
+    where.push(eq(adAccounts.metaAccountId, product.metaAccountId));
+  }
+  if (product.namePattern) {
+    const tokens = extractAlternationTokens(product.namePattern);
+    if (tokens.length === 1) {
+      where.push(like(sql`upper(${campaigns.name})`, `%${tokens[0].toUpperCase()}%`));
+    } else if (tokens.length > 1) {
+      where.push(
+        or(
+          ...tokens.map((t) => like(sql`upper(${campaigns.name})`, `%${t.toUpperCase()}%`)),
+        )!,
+      );
+    }
+  }
+  return where;
+}
+
+/* ─── 1. Diário do Funil ─── */
+
+export interface DailyFunnelRow {
+  date: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  landingPageView: number;
+  initiateCheckout: number;
+  purchase: number;
+}
+
+export async function getDailyFunnel(
+  slug: ProductSlug,
+  range: DateRange,
+): Promise<DailyFunnelRow[]> {
+  const product = getProduct(slug);
+  const conds = [
+    gte(adInsightsDaily.date, range.from),
+    lte(adInsightsDaily.date, range.to),
+    ...productScopeWhere(product),
+  ];
+
+  const rows = await db
+    .select({
+      date: adInsightsDaily.date,
+      impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
+      clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
+      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+      lpv: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'landing_page_view')::int), 0)`,
+      chkt: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'initiate_checkout')::int), 0)`,
+      purchase: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::int), 0)`,
+    })
+    .from(adInsightsDaily)
+    .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
+    .innerJoin(adsets, eq(adsets.id, ads.adsetId))
+    .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
+    .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
+    .where(and(...conds))
+    .groupBy(adInsightsDaily.date)
+    .orderBy(desc(adInsightsDaily.date));
+
+  return rows.map((r) => ({
+    date: r.date,
+    impressions: Number(r.impressions),
+    clicks: Number(r.clicks),
+    spend: Number(r.spend),
+    landingPageView: Number(r.lpv),
+    initiateCheckout: Number(r.chkt),
+    purchase: Number(r.purchase),
+  }));
+}
+
+/* ─── 2. Por Campanha ─── */
+
+export interface CampaignFunnelRow {
+  campaignId: number;
+  campaignName: string;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  reach: number;
+  landingPageView: number;
+  initiateCheckout: number;
+  purchase: number;
+}
+
+export async function getCampaignFunnel(
+  slug: ProductSlug,
+  range: DateRange,
+): Promise<CampaignFunnelRow[]> {
+  const product = getProduct(slug);
+  const conds = [
+    gte(adInsightsDaily.date, range.from),
+    lte(adInsightsDaily.date, range.to),
+    ...productScopeWhere(product),
+  ];
+
+  const rows = await db
+    .select({
+      campaignId: campaigns.id,
+      campaignName: campaigns.name,
+      impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
+      clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
+      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+      reach: sql<number>`coalesce(sum(${adInsightsDaily.reach})::int, 0)`,
+      lpv: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'landing_page_view')::int), 0)`,
+      chkt: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'initiate_checkout')::int), 0)`,
+      purchase: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::int), 0)`,
+    })
+    .from(adInsightsDaily)
+    .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
+    .innerJoin(adsets, eq(adsets.id, ads.adsetId))
+    .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
+    .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
+    .where(and(...conds))
+    .groupBy(campaigns.id, campaigns.name)
+    .orderBy(desc(sql`sum(${adInsightsDaily.spend})`));
+
+  return rows.map((r) => ({
+    campaignId: Number(r.campaignId),
+    campaignName: String(r.campaignName),
+    impressions: Number(r.impressions),
+    clicks: Number(r.clicks),
+    spend: Number(r.spend),
+    reach: Number(r.reach),
+    landingPageView: Number(r.lpv),
+    initiateCheckout: Number(r.chkt),
+    purchase: Number(r.purchase),
+  }));
+}
+
+/* ─── 3. Por Criativo ─── */
+
+export interface CreativeFunnelRow {
+  adId: number;
+  adName: string;
+  thumbnailUrl: string | null;
+  landingUrl: string | null;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  purchase: number;
+}
+
+export async function getCreativeFunnel(
+  slug: ProductSlug,
+  range: DateRange,
+  limit = 50,
+): Promise<CreativeFunnelRow[]> {
+  const product = getProduct(slug);
+  const conds = [
+    gte(adInsightsDaily.date, range.from),
+    lte(adInsightsDaily.date, range.to),
+    ...productScopeWhere(product),
+  ];
+
+  const rows = await db
+    .select({
+      adId: ads.id,
+      adName: ads.name,
+      thumbnailUrl: creatives.thumbnailUrl,
+      landingUrl: ads.landingUrl,
+      impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
+      clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
+      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+      purchase: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::int), 0)`,
+    })
+    .from(adInsightsDaily)
+    .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
+    .leftJoin(creatives, eq(creatives.id, ads.creativeId))
+    .innerJoin(adsets, eq(adsets.id, ads.adsetId))
+    .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
+    .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
+    .where(and(...conds))
+    .groupBy(ads.id, ads.name, creatives.thumbnailUrl, ads.landingUrl)
+    .orderBy(desc(sql`sum(${adInsightsDaily.spend})`))
+    .limit(limit);
+
+  return rows.map((r) => ({
+    adId: Number(r.adId),
+    adName: String(r.adName),
+    thumbnailUrl: r.thumbnailUrl,
+    landingUrl: r.landingUrl,
+    impressions: Number(r.impressions),
+    clicks: Number(r.clicks),
+    spend: Number(r.spend),
+    purchase: Number(r.purchase),
+  }));
+}
+
+/* ─── 4. Por Página ─── */
+
+export interface PageFunnelRow {
+  landingUrl: string | null;
+  impressions: number;
+  clicks: number;
+  spend: number;
+  landingPageView: number;
+  initiateCheckout: number;
+  purchase: number;
+}
+
+export async function getPageFunnel(
+  slug: ProductSlug,
+  range: DateRange,
+): Promise<PageFunnelRow[]> {
+  const product = getProduct(slug);
+  const conds = [
+    gte(adInsightsDaily.date, range.from),
+    lte(adInsightsDaily.date, range.to),
+    ...productScopeWhere(product),
+  ];
+
+  const rows = await db
+    .select({
+      landingUrl: ads.landingUrl,
+      impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
+      clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
+      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+      lpv: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'landing_page_view')::int), 0)`,
+      chkt: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'initiate_checkout')::int), 0)`,
+      purchase: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::int), 0)`,
+    })
+    .from(adInsightsDaily)
+    .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
+    .innerJoin(adsets, eq(adsets.id, ads.adsetId))
+    .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
+    .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
+    .where(and(...conds))
+    .groupBy(ads.landingUrl)
+    .orderBy(desc(sql`sum(${adInsightsDaily.spend})`));
+
+  return rows.map((r) => ({
+    landingUrl: r.landingUrl,
+    impressions: Number(r.impressions),
+    clicks: Number(r.clicks),
+    spend: Number(r.spend),
+    landingPageView: Number(r.lpv),
+    initiateCheckout: Number(r.chkt),
+    purchase: Number(r.purchase),
+  }));
+}

@@ -199,7 +199,7 @@ export function createMetaClient(cfg: MetaClientConfig): MetaClient {
               // existia no scan completo de /adcreatives (10k+ itens) —
               // aqui são ~500 referenciados por ads ativos, cabe tranquilo.
               fields:
-                "id,name,thumbnail_url,image_url,video_id,object_type,title,body,call_to_action_type",
+                "id,name,thumbnail_url,image_url,video_id,object_type,title,body,call_to_action_type,object_story_spec,asset_feed_spec",
               thumbnail_width: "400",
               thumbnail_height: "400",
             }),

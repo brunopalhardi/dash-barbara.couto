@@ -2,23 +2,22 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { ChevronDown, ImageOff } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { ImageOff } from "lucide-react";
 import { fmt } from "./format";
 import type { AdRow } from "@/lib/queries/dashboard";
 
 type SortKey = "ctr" | "roas" | "spend" | "purchases";
 
 const SORT_OPTIONS: Array<{ key: SortKey; label: string }> = [
-  { key: "ctr", label: "CTR" },
-  { key: "roas", label: "ROAS" },
-  { key: "spend", label: "Gasto" },
-  { key: "purchases", label: "Vendas" },
+  { key: "spend", label: "gasto" },
+  { key: "purchases", label: "vendas" },
+  { key: "roas", label: "roas" },
+  { key: "ctr", label: "ctr" },
 ];
 
 interface CreativeListProps {
   ads: AdRow[];
-  basePath: string; // "/desafio/criativo" | "/guia/criativo"
+  basePath: string;
   activeAdId?: number;
 }
 
@@ -27,7 +26,7 @@ function ctrOf(ad: AdRow): number {
 }
 
 export function CreativeList({ ads, basePath, activeAdId }: CreativeListProps) {
-  const [sortBy, setSortBy] = useState<SortKey>("ctr");
+  const [sortBy, setSortBy] = useState<SortKey>("spend");
 
   const sorted = [...ads].sort((a, b) => {
     if (sortBy === "ctr") return ctrOf(b) - ctrOf(a);
@@ -36,65 +35,109 @@ export function CreativeList({ ads, basePath, activeAdId }: CreativeListProps) {
 
   return (
     <div className="flex flex-col gap-3">
+      {/* Sort toggle */}
       <div className="flex items-center justify-between">
-        <span className="text-xs uppercase tracking-wider text-muted-foreground">Ordenar por</span>
-        <div className="relative">
-          <select
-            value={sortBy}
-            onChange={(e) => setSortBy(e.target.value as SortKey)}
-            className="appearance-none pl-3 pr-8 py-1.5 rounded-md border border-border/60 bg-card text-xs text-foreground"
-          >
-            {SORT_OPTIONS.map((o) => (
-              <option key={o.key} value={o.key}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-          <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground pointer-events-none" />
+        <div className="font-mono text-[10px] tracking-wide text-muted-foreground/60 lowercase">
+          ordenar por
+        </div>
+        <div className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card p-[3px]">
+          {SORT_OPTIONS.map((o) => (
+            <button
+              key={o.key}
+              type="button"
+              onClick={() => setSortBy(o.key)}
+              className={`font-mono text-[10px] tracking-wide font-medium px-2 py-1 rounded transition-colors lowercase ${
+                sortBy === o.key
+                  ? "bg-white/[0.06] text-foreground"
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              {o.label}
+            </button>
+          ))}
         </div>
       </div>
 
-      <div className="space-y-2 max-h-[600px] overflow-y-auto pr-1">
+      <div className="space-y-1.5 max-h-[calc(100vh-220px)] overflow-y-auto pr-1">
         {sorted.map((ad, idx) => {
           const active = ad.adId === activeAdId;
           const ctr = ctrOf(ad);
           const roas = ad.spend > 0 ? ad.revenue / ad.spend : 0;
+          const isWinner = idx === 0 && ad.purchases > 0;
+
           return (
             <Link
               key={ad.adId}
               href={`${basePath}/${ad.adId}`}
-              className={cn(
-                "flex items-center gap-3 p-2.5 rounded-md border transition-colors",
+              className={`relative flex items-center gap-3 p-2.5 rounded-md border transition-colors overflow-hidden ${
                 active
-                  ? "bg-primary/10 border-primary/40"
-                  : "bg-card border-border/60 hover:border-primary/30",
-              )}
+                  ? "border-primary/50 bg-primary/[0.06]"
+                  : "border-border bg-card hover:border-border-hi"
+              }`}
             >
-              <div className="flex flex-col items-center gap-1 shrink-0 w-7">
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground">#{idx + 1}</span>
-                <div className="h-7 w-7 rounded bg-muted/40 flex items-center justify-center overflow-hidden">
+              {/* Active accent rail */}
+              {active && (
+                <div className="absolute inset-y-0 left-0 w-[2px] bg-primary" />
+              )}
+
+              {/* Rank pill */}
+              <div className="flex flex-col items-center gap-1.5 shrink-0">
+                <div
+                  className={`font-mono tabular-nums text-[10px] font-medium leading-none ${
+                    isWinner
+                      ? "text-emerald-400"
+                      : active
+                        ? "text-primary"
+                        : "text-muted-foreground/50"
+                  }`}
+                >
+                  {String(idx + 1).padStart(2, "0")}
+                </div>
+                <div className="h-9 w-9 rounded bg-muted/30 flex items-center justify-center overflow-hidden border border-white/5">
                   {ad.thumbnailUrl ? (
                     /* eslint-disable-next-line @next/next/no-img-element */
-                    <img src={ad.thumbnailUrl} alt="" className="h-full w-full object-cover" />
+                    <img
+                      src={ad.thumbnailUrl}
+                      alt=""
+                      className="h-full w-full object-cover"
+                    />
                   ) : (
-                    <ImageOff className="h-3.5 w-3.5 text-muted-foreground" />
+                    <ImageOff className="h-3 w-3 text-muted-foreground/60" />
                   )}
                 </div>
               </div>
+
+              {/* Name + stats */}
               <div className="min-w-0 flex-1">
-                <div className="text-sm font-medium truncate">{ad.adName}</div>
-                <div className="text-[10px] text-muted-foreground tabular-nums flex gap-3">
-                  <span>CTR {fmt.pct(ctr, 1)}</span>
-                  <span>ROAS {fmt.ratio(roas)}</span>
-                  <span>{fmt.money(ad.spend)}</span>
+                <div
+                  className={`text-[13px] font-medium truncate ${
+                    active ? "text-foreground" : "text-foreground/90"
+                  }`}
+                  title={ad.adName}
+                >
+                  {ad.adName}
+                </div>
+                <div className="flex items-center gap-3 mt-1 font-mono tabular-nums text-[10px] text-muted-foreground/70">
+                  <span>
+                    <span className="text-muted-foreground/40">ctr</span>{" "}
+                    {fmt.pct1(ctr)}
+                  </span>
+                  <span>
+                    <span className="text-muted-foreground/40">roas</span>{" "}
+                    {fmt.ratio(roas)}
+                  </span>
+                  <span className="text-foreground/80 font-medium">
+                    {fmt.money(ad.spend)}
+                  </span>
                 </div>
               </div>
             </Link>
           );
         })}
+
         {sorted.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-6">
-            Sem criativos no período.
+          <p className="font-mono text-xs text-muted-foreground/60 text-center py-6 lowercase">
+            sem criativos no período
           </p>
         ) : null}
       </div>

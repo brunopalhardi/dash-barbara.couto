@@ -47,8 +47,9 @@ export default async function GuiaCreativeDetailPage({
   return (
     <>
       <PageHeader
-        title="Análise de criativos"
-        subtitle="Guia · clique nos criativos pra comparar métricas"
+        eyebrow="guia · análise de criativos"
+        title={detail?.adName ?? "Análise de criativos"}
+        subtitle={detail?.campaignName ?? "Clique nos criativos pra comparar métricas"}
         hidePicker
       />
       <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4">

@@ -29,8 +29,9 @@ export default async function DesafioCreativeDetailPage({
   return (
     <>
       <PageHeader
-        title="Análise de criativos"
-        subtitle="Desafio · clique nos criativos pra comparar métricas"
+        eyebrow="desafio · análise de criativos"
+        title={detail?.adName ?? "Análise de criativos"}
+        subtitle={detail?.campaignName ?? "Clique nos criativos pra comparar métricas"}
         hidePicker
       />
       <div className="grid grid-cols-1 lg:grid-cols-[360px_1fr] gap-4">

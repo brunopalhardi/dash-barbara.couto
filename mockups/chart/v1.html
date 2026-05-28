@@ -1,0 +1,373 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup · Daily Bar Chart · v1</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300..700&family=Geist+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  :root {
+    --bg: #09090b;
+    --bg-card: #141418;
+    --border: #232328;
+    --border-hi: #34343b;
+    --text: #fafafa;
+    --text-muted: #a1a1aa;
+    --text-faint: #52525b;
+    --winner: #34d399;
+    --loser: #f87171;
+    --warn: #fbbf24;
+    --bar: #6366f1;
+    --bar-prev: rgba(99, 102, 241, 0.25);
+  }
+  html, body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Geist', system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    letter-spacing: -0.005em;
+  }
+  .mono { font-family: 'Geist Mono', monospace; font-feature-settings: 'tnum', 'zero'; }
+  .tabular { font-variant-numeric: tabular-nums; }
+
+  .meta {
+    font-family: 'Geist Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 0.04em;
+    color: var(--text-faint);
+    text-transform: lowercase;
+  }
+  .rule {
+    height: 1px;
+    background: linear-gradient(90deg, var(--border) 0%, transparent 100%);
+  }
+  .stat-label {
+    font-size: 10px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-faint);
+    font-weight: 500;
+  }
+  .stat-value-mid {
+    font-family: 'Geist Mono', monospace;
+    font-feature-settings: 'tnum';
+    font-weight: 500;
+    font-size: 22px;
+    line-height: 1;
+    letter-spacing: -0.03em;
+  }
+
+  .card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+  }
+
+  /* Metric toggle */
+  .metric-toggle {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px;
+    display: inline-flex;
+    gap: 2px;
+  }
+  .metric-toggle button {
+    font-family: 'Geist Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 0.04em;
+    font-weight: 500;
+    padding: 5px 10px;
+    border-radius: 4px;
+    color: var(--text-muted);
+    transition: all 150ms;
+    text-transform: lowercase;
+  }
+  .metric-toggle button.is-active {
+    background: rgba(255,255,255,0.06);
+    color: var(--text);
+  }
+  .metric-toggle button:not(.is-active):hover {
+    color: var(--text);
+  }
+
+  /* Bars */
+  .bar {
+    transition: opacity 150ms;
+  }
+  .bar:hover { opacity: 0.85; }
+  .bar-prev {
+    fill: var(--bar-prev);
+  }
+
+  /* Grid line */
+  .grid-line {
+    stroke: rgba(255,255,255,0.04);
+    stroke-width: 1;
+    stroke-dasharray: 2 4;
+  }
+  .avg-line {
+    stroke: rgba(251, 191, 36, 0.5);
+    stroke-width: 1;
+    stroke-dasharray: 3 3;
+  }
+</style>
+</head>
+<body class="min-h-screen">
+
+<main class="max-w-[1400px] mx-auto px-6 md:px-12 py-10">
+
+  <header class="mb-6">
+    <div class="meta mb-2">performance diária · 18 → 27 mai</div>
+    <h1 class="text-3xl md:text-4xl font-medium leading-tight tracking-tight">Performance diária</h1>
+    <div class="rule mt-4"></div>
+  </header>
+
+  <!-- Chart card -->
+  <div class="card p-6">
+
+    <!-- Top bar: stats + toggle -->
+    <div class="flex items-start justify-between gap-6 mb-6 flex-wrap">
+      <div class="flex items-center gap-8">
+        <div>
+          <div class="stat-label">Total</div>
+          <div class="stat-value-mid mt-1.5">10</div>
+        </div>
+        <div>
+          <div class="stat-label">Média / dia</div>
+          <div class="stat-value-mid mt-1.5">1,0</div>
+        </div>
+        <div>
+          <div class="stat-label">Melhor dia</div>
+          <div class="stat-value-mid mt-1.5 text-[var(--winner)]">
+            2 <span class="text-sm text-[var(--text-muted)] font-normal" style="font-family: 'Geist', sans-serif; letter-spacing: 0;">em 26/mai</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="metric-toggle">
+        <button class="is-active">Vendas</button>
+        <button>Receita</button>
+        <button>Investido</button>
+        <button>ROAS</button>
+      </div>
+    </div>
+
+    <!-- SVG chart (static mockup) -->
+    <div class="relative">
+      <svg viewBox="0 0 1000 260" preserveAspectRatio="none" class="w-full h-[260px]">
+
+        <!-- Horizontal grid lines -->
+        <line class="grid-line" x1="50" x2="990" y1="40" y2="40"/>
+        <line class="grid-line" x1="50" x2="990" y1="100" y2="100"/>
+        <line class="grid-line" x1="50" x2="990" y1="160" y2="160"/>
+        <line class="grid-line" x1="50" x2="990" y1="220" y2="220"/>
+
+        <!-- Y-axis labels -->
+        <text x="40" y="44" text-anchor="end" fill="var(--text-faint)" font-size="10" font-family="Geist Mono">2</text>
+        <text x="40" y="104" text-anchor="end" fill="var(--text-faint)" font-size="10" font-family="Geist Mono">1.5</text>
+        <text x="40" y="164" text-anchor="end" fill="var(--text-faint)" font-size="10" font-family="Geist Mono">1</text>
+        <text x="40" y="224" text-anchor="end" fill="var(--text-faint)" font-size="10" font-family="Geist Mono">0.5</text>
+
+        <!-- Avg reference line -->
+        <line class="avg-line" x1="50" x2="990" y1="160" y2="160"/>
+        <text x="995" y="156" fill="var(--warn)" font-size="9" font-family="Geist Mono" opacity="0.7" text-anchor="end">avg 1,0</text>
+
+        <!-- Bars (10 days) -->
+        <!-- Day 1 (18/mai) - 1 sale -->
+        <rect class="bar" x="68" y="160" width="60" height="60" fill="#52525b" rx="3"/>
+        <text x="98" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">18/mai</text>
+        <text x="98" y="252" text-anchor="middle" fill="var(--text-faint)" font-size="9" font-family="Geist Mono">qua</text>
+
+        <!-- Day 2 (19) - 1 -->
+        <rect class="bar" x="148" y="160" width="60" height="60" fill="#52525b" rx="3"/>
+        <text x="178" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">19/mai</text>
+        <text x="178" y="252" text-anchor="middle" fill="var(--text-faint)" font-size="9" font-family="Geist Mono">qui</text>
+
+        <!-- Day 3 (20) - 0 -->
+        <rect class="bar" x="228" y="220" width="60" height="0" fill="#52525b" rx="3"/>
+        <text x="258" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">20/mai</text>
+        <text x="258" y="252" text-anchor="middle" fill="var(--text-faint)" font-size="9" font-family="Geist Mono">sex</text>
+        <text x="258" y="215" text-anchor="middle" fill="var(--text-faint)" font-size="10" font-family="Geist Mono">0</text>
+
+        <!-- Day 4 (21) - 1 -->
+        <rect class="bar" x="308" y="160" width="60" height="60" fill="#52525b" rx="3"/>
+        <text x="338" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">21/mai</text>
+        <text x="338" y="252" text-anchor="middle" fill="var(--text-faint)" font-size="9" font-family="Geist Mono">sáb</text>
+
+        <!-- Day 5 (22) - 1 -->
+        <rect class="bar" x="388" y="160" width="60" height="60" fill="#52525b" rx="3"/>
+        <text x="418" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">22/mai</text>
+        <text x="418" y="252" text-anchor="middle" fill="var(--text-faint)" font-size="9" font-family="Geist Mono">dom</text>
+
+        <!-- Day 6 (23) - 2 -->
+        <rect class="bar" x="468" y="100" width="60" height="120" fill="#6366f1" rx="3"/>
+        <text x="498" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">23/mai</text>
+        <text x="498" y="252" text-anchor="middle" fill="var(--text-faint)" font-size="9" font-family="Geist Mono">seg</text>
+
+        <!-- Day 7 (24) - 2 -->
+        <rect class="bar" x="548" y="100" width="60" height="120" fill="#6366f1" rx="3"/>
+        <text x="578" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">24/mai</text>
+        <text x="578" y="252" text-anchor="middle" fill="var(--text-faint)" font-size="9" font-family="Geist Mono">ter</text>
+
+        <!-- Day 8 (25) - 0 -->
+        <rect class="bar" x="628" y="220" width="60" height="0" fill="#52525b" rx="3"/>
+        <text x="658" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">25/mai</text>
+        <text x="658" y="252" text-anchor="middle" fill="var(--text-faint)" font-size="9" font-family="Geist Mono">qua</text>
+        <text x="658" y="215" text-anchor="middle" fill="var(--text-faint)" font-size="10" font-family="Geist Mono">0</text>
+
+        <!-- Day 9 (26) - 2 BEST -->
+        <rect class="bar" x="708" y="40" width="60" height="180" fill="#34d399" rx="3"/>
+        <text x="738" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">26/mai</text>
+        <text x="738" y="252" text-anchor="middle" fill="var(--winner)" font-size="9" font-family="Geist Mono" font-weight="600">↑ melhor</text>
+
+        <!-- Day 10 (27) - 1 -->
+        <rect class="bar" x="788" y="160" width="60" height="60" fill="#6366f1" rx="3"/>
+        <text x="818" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">27/mai</text>
+        <text x="818" y="252" text-anchor="middle" fill="var(--text-faint)" font-size="9" font-family="Geist Mono">sex</text>
+
+      </svg>
+    </div>
+
+    <!-- Legend -->
+    <div class="flex items-center gap-5 mt-4 flex-wrap text-xs">
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded-sm" style="background: #34d399;"></span>
+        <span class="meta">melhor dia</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded-sm" style="background: #6366f1;"></span>
+        <span class="meta">acima da média</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded-sm" style="background: #52525b;"></span>
+        <span class="meta">abaixo da média</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-0.5 border-t border-dashed" style="border-color: rgba(251, 191, 36, 0.5);"></span>
+        <span class="meta">média do período</span>
+      </div>
+    </div>
+
+  </div>
+
+  <p class="text-sm text-[var(--text-muted)] mt-8 mb-4">
+    Versão com período anterior sobreposto (toggle "vs anterior" ativo):
+  </p>
+
+  <!-- Same chart but with previous-period bars overlaid -->
+  <div class="card p-6">
+    <div class="flex items-start justify-between gap-6 mb-6 flex-wrap">
+      <div class="flex items-center gap-8">
+        <div>
+          <div class="stat-label">Total · atual</div>
+          <div class="stat-value-mid mt-1.5">10</div>
+        </div>
+        <div>
+          <div class="stat-label">Total · anterior</div>
+          <div class="stat-value-mid mt-1.5 text-[var(--text-muted)]">8</div>
+        </div>
+        <div>
+          <div class="stat-label">Delta</div>
+          <div class="stat-value-mid mt-1.5 text-[var(--winner)]">↑ +25%</div>
+        </div>
+      </div>
+      <div class="metric-toggle">
+        <button class="is-active">Vendas</button>
+        <button>Receita</button>
+        <button>Investido</button>
+        <button>ROAS</button>
+      </div>
+    </div>
+
+    <div class="relative">
+      <svg viewBox="0 0 1000 260" preserveAspectRatio="none" class="w-full h-[260px]">
+        <!-- Grid -->
+        <line class="grid-line" x1="50" x2="990" y1="40" y2="40"/>
+        <line class="grid-line" x1="50" x2="990" y1="100" y2="100"/>
+        <line class="grid-line" x1="50" x2="990" y1="160" y2="160"/>
+        <line class="grid-line" x1="50" x2="990" y1="220" y2="220"/>
+
+        <text x="40" y="44" text-anchor="end" fill="var(--text-faint)" font-size="10" font-family="Geist Mono">2</text>
+        <text x="40" y="164" text-anchor="end" fill="var(--text-faint)" font-size="10" font-family="Geist Mono">1</text>
+
+        <!-- Day 1: prev=2, curr=1 -->
+        <rect class="bar-prev" x="64" y="100" width="64" height="120" rx="3"/>
+        <rect class="bar" x="78" y="160" width="40" height="60" fill="#52525b" rx="3"/>
+        <text x="98" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">18/mai</text>
+
+        <!-- Day 2 -->
+        <rect class="bar-prev" x="144" y="160" width="64" height="60" rx="3"/>
+        <rect class="bar" x="158" y="160" width="40" height="60" fill="#52525b" rx="3"/>
+        <text x="178" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">19/mai</text>
+
+        <!-- Day 3 -->
+        <rect class="bar-prev" x="224" y="220" width="64" height="0" rx="3"/>
+        <rect class="bar" x="238" y="220" width="40" height="0" fill="#52525b" rx="3"/>
+        <text x="258" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">20/mai</text>
+
+        <!-- Day 4 -->
+        <rect class="bar-prev" x="304" y="160" width="64" height="60" rx="3"/>
+        <rect class="bar" x="318" y="160" width="40" height="60" fill="#52525b" rx="3"/>
+        <text x="338" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">21/mai</text>
+
+        <!-- Day 5 -->
+        <rect class="bar-prev" x="384" y="160" width="64" height="60" rx="3"/>
+        <rect class="bar" x="398" y="160" width="40" height="60" fill="#52525b" rx="3"/>
+        <text x="418" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">22/mai</text>
+
+        <!-- Day 6 -->
+        <rect class="bar-prev" x="464" y="160" width="64" height="60" rx="3"/>
+        <rect class="bar" x="478" y="100" width="40" height="120" fill="#6366f1" rx="3"/>
+        <text x="498" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">23/mai</text>
+
+        <!-- Day 7 -->
+        <rect class="bar-prev" x="544" y="100" width="64" height="120" rx="3"/>
+        <rect class="bar" x="558" y="100" width="40" height="120" fill="#6366f1" rx="3"/>
+        <text x="578" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">24/mai</text>
+
+        <!-- Day 8 -->
+        <rect class="bar-prev" x="624" y="160" width="64" height="60" rx="3"/>
+        <rect class="bar" x="638" y="220" width="40" height="0" fill="#52525b" rx="3"/>
+        <text x="658" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">25/mai</text>
+
+        <!-- Day 9 BEST -->
+        <rect class="bar-prev" x="704" y="100" width="64" height="120" rx="3"/>
+        <rect class="bar" x="718" y="40" width="40" height="180" fill="#34d399" rx="3"/>
+        <text x="738" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">26/mai</text>
+
+        <!-- Day 10 -->
+        <rect class="bar-prev" x="784" y="160" width="64" height="60" rx="3"/>
+        <rect class="bar" x="798" y="160" width="40" height="60" fill="#6366f1" rx="3"/>
+        <text x="818" y="240" text-anchor="middle" fill="var(--text-muted)" font-size="10" font-family="Geist Mono">27/mai</text>
+      </svg>
+    </div>
+
+    <div class="flex items-center gap-5 mt-4 flex-wrap text-xs">
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded-sm" style="background: #6366f1;"></span>
+        <span class="meta">atual</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded-sm" style="background: var(--bar-prev);"></span>
+        <span class="meta">período anterior</span>
+      </div>
+      <div class="flex items-center gap-1.5">
+        <span class="w-3 h-3 rounded-sm" style="background: #34d399;"></span>
+        <span class="meta">melhor dia</span>
+      </div>
+    </div>
+  </div>
+
+  <footer class="mt-10 pt-5 border-t border-[var(--border)]">
+    <p class="meta">v1 · barras coloridas por performance · linha de média · toggle de métrica em mono pill · stats grandes em Geist Mono</p>
+  </footer>
+
+</main>
+
+</body>
+</html>

@@ -12,8 +12,9 @@ import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { purchases } from "@/lib/schema/purchases";
 import { syncJobs } from "@/lib/schema/sync";
-import { fetchSalesHistory } from "./client";
+import { fetchSalesHistory, fetchBuyerPhone } from "./client";
 import { parseSalesHistoryItem } from "./parser-history";
+import { normalizePhone } from "@/lib/utils/phone";
 
 const OVERLAP_MS = 2 * 60 * 60 * 1000; // 2h
 
@@ -31,6 +32,38 @@ async function upsertPurchase(item: unknown, now: Date): Promise<boolean> {
   const parsed = parseSalesHistoryItem(item);
   if (!parsed) return false;
 
+  // Sales-history NÃO traz telefone — só /sales/users traz. Enriquece compras
+  // approved sem telefone com 1 call extra. Restrito a approved porque é o que
+  // entra no match comprador↔grupo; refunded/chargeback não precisam.
+  // Falha aqui não pode derrubar o sync inteiro → try/catch e segue sem phone.
+  let buyerPhoneRaw = parsed.buyerPhoneRaw;
+  let buyerPhoneE164 = parsed.buyerPhoneE164;
+  if (parsed.status === "approved" && !buyerPhoneE164) {
+    // O cron reprocessa a janela de overlap; como o sales-history nunca traz
+    // telefone, sem este guard toda compra approved re-bateria no /sales/users
+    // a cada sync. Só busca se o registro ainda não tem telefone no banco.
+    const [existing] = await db
+      .select({ phone: purchases.buyerPhoneE164 })
+      .from(purchases)
+      .where(eq(purchases.transactionId, parsed.transactionId))
+      .limit(1);
+    if (!existing?.phone) {
+      try {
+        const fromUsers = await fetchBuyerPhone(parsed.transactionId);
+        if (fromUsers?.phone) {
+          const e164 = normalizePhone(fromUsers.phone);
+          if (e164) {
+            buyerPhoneRaw = fromUsers.phone;
+            buyerPhoneE164 = e164;
+          }
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        console.error(`[hotmart-sync] fetchBuyerPhone falhou (${parsed.transactionId}): ${msg}`);
+      }
+    }
+  }
+
   await db
     .insert(purchases)
     .values({
@@ -40,8 +73,8 @@ async function upsertPurchase(item: unknown, now: Date): Promise<boolean> {
       status: parsed.status,
       buyerName: parsed.buyerName,
       buyerEmail: parsed.buyerEmail,
-      buyerPhoneRaw: parsed.buyerPhoneRaw,
-      buyerPhoneE164: parsed.buyerPhoneE164,
+      buyerPhoneRaw,
+      buyerPhoneE164,
       valueCents: parsed.valueCents,
       currency: parsed.currency,
       purchasedAt: parsed.purchasedAt,

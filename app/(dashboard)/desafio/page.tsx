@@ -80,7 +80,7 @@ export default async function DesafioPage({
     buyers,
   ] = await Promise.all([
     getKpis("desafio", currentRange),
-    getTopAds("desafio", currentRange, { limit: 5, orderBy: "spend" }),
+    getTopAds("desafio", currentRange, { limit: 5, orderBy: "cpa", onlyActive: true }),
     getSendflowGroupSummary(currentRange),
     getApprovedPurchaseCount("desafio", currentRange),
     getApprovedPurchaseRevenue("desafio", currentRange),
@@ -186,7 +186,7 @@ export default async function DesafioPage({
       <Card className="bg-card border-border/60 mb-6">
         <CardHeader>
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Top criativos
+            Top criativos · ativos por menor CPA
           </CardTitle>
         </CardHeader>
         <CardContent>

@@ -57,6 +57,8 @@ export interface AdRow {
   adName: string;
   campaignName: string;
   thumbnailUrl: string | null;
+  /** ACTIVE | PAUSED | DELETED etc., conforme o Meta */
+  status: string;
   spend: number;
   impressions: number;
   clicks: number;
@@ -67,13 +69,32 @@ export interface AdRow {
   cpa: number;
 }
 
+export interface AdDailyPoint {
+  date: string;
+  spend: number;
+  leads: number;
+  purchases: number;
+  revenue: number;
+  /** Custo por venda do dia (0 se não houve venda) */
+  cpa: number;
+}
+
 export interface AdDetail {
   adId: number;
   metaAdId: string;
   adName: string;
+  /** ACTIVE | PAUSED | DELETED etc., conforme o Meta */
+  status: string;
   campaignName: string;
   thumbnailUrl: string | null;
   previewShareableLink: string | null;
+  /** Adset pai */
+  adsetName: string;
+  adsetStatus: string;
+  adsetDailyBudget: number | null; // BRL
+  adsetOptimizationGoal: string | null;
+  /** Conta Meta (act_XXX) pra link do Ads Manager */
+  accountMetaId: string;
   spend: number;
   impressions: number;
   clicks: number;
@@ -94,6 +115,8 @@ export interface AdDetail {
   holdRate: number; // %
   bodyRate: number; // %
   score: number; // 0-100
+  /** Série diária dos últimos 14 dias até range.to */
+  daily: AdDailyPoint[];
 }
 
 /* ─────────────────────────────────────────────────────────────────────── */
@@ -409,7 +432,11 @@ export async function getCycleOverlay(
 export async function getTopAds(
   slug: ProductSlug,
   range: DateRange,
-  opts: { limit?: number; orderBy?: "roas" | "spend" | "purchases" } = {},
+  opts: {
+    limit?: number;
+    orderBy?: "roas" | "spend" | "purchases" | "cpa";
+    onlyActive?: boolean;
+  } = {},
 ): Promise<AdRow[]> {
   const limit = opts.limit ?? 50;
   const product = getProduct(slug);
@@ -418,12 +445,14 @@ export async function getTopAds(
     lte(adInsightsDaily.date, range.to),
     ...productScopeWhere(product),
   ];
+  if (opts.onlyActive) conds.push(eq(ads.status, "ACTIVE"));
 
   const rows = await db
     .select({
       adId: ads.id,
       metaAdId: ads.metaId,
       adName: ads.name,
+      adStatus: ads.status,
       campaignName: campaigns.name,
       thumbnailUrl: creatives.thumbnailUrl,
       spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
@@ -440,7 +469,7 @@ export async function getTopAds(
     .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
     .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
     .where(and(...conds))
-    .groupBy(ads.id, ads.metaId, ads.name, campaigns.name, creatives.thumbnailUrl);
+    .groupBy(ads.id, ads.metaId, ads.name, ads.status, campaigns.name, creatives.thumbnailUrl);
 
   const enriched: AdRow[] = rows.map((r) => {
     const spend = Number(r.spend);
@@ -450,6 +479,7 @@ export async function getTopAds(
       adId: r.adId,
       metaAdId: r.metaAdId,
       adName: r.adName,
+      status: r.adStatus,
       campaignName: r.campaignName,
       thumbnailUrl: r.thumbnailUrl,
       spend,
@@ -464,6 +494,13 @@ export async function getTopAds(
   });
 
   const orderBy = opts.orderBy ?? "spend";
+  if (orderBy === "cpa") {
+    // CPA: menor é melhor. Sem venda no período = não entra no top.
+    return enriched
+      .filter((r) => r.purchases > 0)
+      .sort((a, b) => a.cpa - b.cpa)
+      .slice(0, limit);
+  }
   enriched.sort((a, b) => (b[orderBy] as number) - (a[orderBy] as number));
   return enriched.slice(0, limit);
 }
@@ -710,9 +747,15 @@ export async function getAdDetail(
       adId: ads.id,
       metaAdId: ads.metaId,
       adName: ads.name,
+      adStatus: ads.status,
       campaignName: campaigns.name,
       thumbnailUrl: creatives.thumbnailUrl,
       previewShareableLink: ads.previewUrl,
+      adsetName: adsets.name,
+      adsetStatus: adsets.status,
+      adsetDailyBudget: sql<string | null>`${adsets.dailyBudget}`,
+      adsetOptimizationGoal: adsets.optimizationGoal,
+      accountMetaId: adAccounts.metaAccountId,
       spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
       impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
       clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
@@ -730,6 +773,7 @@ export async function getAdDetail(
     .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
     .innerJoin(adsets, eq(adsets.id, ads.adsetId))
     .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
+    .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
     .leftJoin(creatives, eq(creatives.id, ads.creativeId))
     .where(
       and(
@@ -738,7 +782,20 @@ export async function getAdDetail(
         lte(adInsightsDaily.date, range.to),
       ),
     )
-    .groupBy(ads.id, ads.metaId, ads.name, ads.previewUrl, campaigns.name, creatives.thumbnailUrl);
+    .groupBy(
+      ads.id,
+      ads.metaId,
+      ads.name,
+      ads.status,
+      ads.previewUrl,
+      campaigns.name,
+      creatives.thumbnailUrl,
+      adsets.name,
+      adsets.status,
+      adsets.dailyBudget,
+      adsets.optimizationGoal,
+      adAccounts.metaAccountId,
+    );
 
   if (!row) return null;
 
@@ -761,13 +818,61 @@ export async function getAdDetail(
   const bodyRate = impressions > 0 ? (video50 / impressions) * 100 : 0;
   const score = hookRate * 0.3 + holdRate * 0.4 + bodyRate * 0.3;
 
+  // Série diária de 14d até range.to — preenche zeros pra dias sem insight
+  const dailyFrom = (() => {
+    const d = new Date(range.to + "T12:00:00");
+    d.setDate(d.getDate() - 13);
+    return dateISO(d);
+  })();
+  const dailyRows = await db
+    .select({
+      date: adInsightsDaily.date,
+      spend: sql<number>`coalesce(${adInsightsDaily.spend}::float, 0)`,
+      leads: sql<number>`coalesce((${adInsightsDaily.conversions}->>'lead')::float, 0)`,
+      purchases: sql<number>`coalesce((${adInsightsDaily.conversions}->>'purchase')::float, 0)`,
+      revenue: sql<number>`coalesce((${adInsightsDaily.conversions}->>'revenue')::float, 0)`,
+    })
+    .from(adInsightsDaily)
+    .where(
+      and(
+        eq(adInsightsDaily.adId, adId),
+        gte(adInsightsDaily.date, dailyFrom),
+        lte(adInsightsDaily.date, range.to),
+      ),
+    );
+  const dailyMap = new Map(dailyRows.map((d) => [d.date, d]));
+  const daily: AdDailyPoint[] = [];
+  const cursor = new Date(dailyFrom + "T12:00:00");
+  const endCursor = new Date(range.to + "T12:00:00");
+  while (cursor <= endCursor) {
+    const iso = dateISO(cursor);
+    const r = dailyMap.get(iso);
+    const dSpend = r ? Number(r.spend) : 0;
+    const dPurchases = r ? Number(r.purchases) : 0;
+    daily.push({
+      date: iso,
+      spend: dSpend,
+      leads: r ? Number(r.leads) : 0,
+      purchases: dPurchases,
+      revenue: r ? Number(r.revenue) : 0,
+      cpa: dPurchases > 0 ? dSpend / dPurchases : 0,
+    });
+    cursor.setDate(cursor.getDate() + 1);
+  }
+
   return {
     adId: row.adId,
     metaAdId: row.metaAdId,
     adName: row.adName,
+    status: row.adStatus,
     campaignName: row.campaignName,
     thumbnailUrl: row.thumbnailUrl,
     previewShareableLink: row.previewShareableLink,
+    adsetName: row.adsetName,
+    adsetStatus: row.adsetStatus,
+    adsetDailyBudget: row.adsetDailyBudget ? Number(row.adsetDailyBudget) / 100 : null,
+    adsetOptimizationGoal: row.adsetOptimizationGoal,
+    accountMetaId: row.accountMetaId,
     spend,
     impressions,
     clicks,
@@ -788,5 +893,6 @@ export async function getAdDetail(
     holdRate,
     bodyRate,
     score,
+    daily,
   };
 }

@@ -1,5 +1,6 @@
-import { ExternalLink, ImageOff } from "lucide-react";
+import { ExternalLink, ImageOff, Settings2 } from "lucide-react";
 import { fmt } from "./format";
+import { Sparkline } from "./sparkline";
 import type { AdDetail } from "@/lib/queries/dashboard";
 
 interface CreativeDetailPanelProps {
@@ -98,9 +99,36 @@ function FunnelStage({ label, pct, tone = "default", position, empty }: FunnelSt
   );
 }
 
+function buildAdManagerUrl(accountMetaId: string, metaAdId: string): string {
+  // accountMetaId vem como dígitos (sem prefixo "act_")
+  const act = accountMetaId.startsWith("act_") ? accountMetaId : `act_${accountMetaId}`;
+  return `https://adsmanager.facebook.com/adsmanager/manage/ads?act=${act}&selected_ad_ids=${metaAdId}`;
+}
+
+function StatusBadge({ status }: { status: string }) {
+  const isActive = status === "ACTIVE";
+  return (
+    <span
+      className={
+        isActive
+          ? "inline-flex items-center gap-1.5 font-mono text-[10px] tracking-wide lowercase px-2 py-0.5 rounded-full border border-emerald-500/40 text-emerald-300 bg-emerald-500/10"
+          : "inline-flex items-center gap-1.5 font-mono text-[10px] tracking-wide lowercase px-2 py-0.5 rounded-full border border-amber-500/40 text-amber-300 bg-amber-500/10"
+      }
+    >
+      <span
+        className={
+          isActive ? "h-1.5 w-1.5 rounded-full bg-emerald-400" : "h-1.5 w-1.5 rounded-full bg-amber-400"
+        }
+      />
+      {status.toLowerCase()}
+    </span>
+  );
+}
+
 export function CreativeDetailPanel({ ad }: CreativeDetailPanelProps) {
   const isVideo = ad.videoViews > 0;
   const tone = roasTone(ad.roas);
+  const adManagerUrl = buildAdManagerUrl(ad.accountMetaId, ad.metaAdId);
 
   // Heuristics pra rails secundários
   const cacTone =
@@ -109,6 +137,12 @@ export function CreativeDetailPanel({ ad }: CreativeDetailPanelProps) {
       : ad.cac > 200
         ? "bg-amber-400"
         : "bg-emerald-400";
+
+  // Série diária — só renderiza sparkline se tiver atividade
+  const spendSeries = ad.daily.map((d) => d.spend);
+  const purchasesSeries = ad.daily.map((d) => d.purchases);
+  const cpaSeries = ad.daily.map((d) => d.cpa);
+  const totalDailySpend = spendSeries.reduce((acc, v) => acc + v, 0);
 
   return (
     <div className="space-y-4">
@@ -129,22 +163,69 @@ export function CreativeDetailPanel({ ad }: CreativeDetailPanelProps) {
             </div>
           )}
           <div className="absolute inset-0 bg-gradient-to-t from-card/95 via-card/30 to-transparent pointer-events-none" />
-          {ad.previewShareableLink ? (
+          <div className="absolute top-3 left-3">
+            <StatusBadge status={ad.status} />
+          </div>
+          <div className="absolute bottom-3 right-3 flex items-center gap-2">
+            {ad.previewShareableLink ? (
+              <a
+                href={ad.previewShareableLink}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-background/90 backdrop-blur-sm border border-border text-xs font-medium hover:bg-background transition-colors"
+              >
+                pré-visualizar <ExternalLink className="h-3 w-3" />
+              </a>
+            ) : null}
             <a
-              href={ad.previewShareableLink}
+              href={adManagerUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-background/90 backdrop-blur-sm border border-border text-xs font-medium hover:bg-background transition-colors"
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-primary/90 backdrop-blur-sm border border-primary/40 text-xs font-medium text-primary-foreground hover:bg-primary transition-colors"
+              title="Abrir no Gerenciador de Anúncios do Meta"
             >
-              ver no meta <ExternalLink className="h-3 w-3" />
+              <Settings2 className="h-3 w-3" /> ads manager
             </a>
-          ) : null}
+          </div>
         </div>
         <div className="p-5">
           <div className="font-mono text-[10px] tracking-wide text-muted-foreground/60 lowercase mb-1">
             {ad.campaignName}
           </div>
           <h2 className="text-xl font-medium leading-tight tracking-tight">{ad.adName}</h2>
+        </div>
+      </div>
+
+      {/* Adset card */}
+      <div className="rounded-md border border-border bg-card p-5">
+        <div className="flex items-center justify-between mb-3">
+          <div className="font-mono text-[10px] tracking-wide text-muted-foreground/60 lowercase">
+            conjunto de anúncios
+          </div>
+          <StatusBadge status={ad.adsetStatus} />
+        </div>
+        <div className="text-sm font-medium truncate mb-3" title={ad.adsetName}>
+          {ad.adsetName}
+        </div>
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70 font-medium">
+              Orçamento diário
+            </div>
+            <div className="font-mono font-medium tabular-nums text-base mt-1">
+              {ad.adsetDailyBudget && ad.adsetDailyBudget > 0
+                ? fmt.money(ad.adsetDailyBudget)
+                : "—"}
+            </div>
+          </div>
+          <div>
+            <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70 font-medium">
+              Objetivo
+            </div>
+            <div className="font-mono text-[11px] tabular-nums mt-1.5 text-foreground/80">
+              {ad.adsetOptimizationGoal ? ad.adsetOptimizationGoal.toLowerCase() : "—"}
+            </div>
+          </div>
         </div>
       </div>
 
@@ -216,6 +297,44 @@ export function CreativeDetailPanel({ ad }: CreativeDetailPanelProps) {
             empty={ad.leads === 0}
           />
         </div>
+      </div>
+
+      {/* Histórico 14 dias */}
+      <div className="rounded-md border border-border bg-card p-5">
+        <div className="flex items-center justify-between mb-4">
+          <div className="font-mono text-[10px] tracking-wide text-muted-foreground/60 lowercase">
+            últimos 14 dias
+          </div>
+          <div className="font-mono text-[10px] tracking-wide text-muted-foreground/40 lowercase">
+            {fmt.money(totalDailySpend)} no período
+          </div>
+        </div>
+        {totalDailySpend > 0 ? (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70 font-medium mb-1.5">
+                Gasto
+              </div>
+              <Sparkline values={spendSeries} color="#a78bfa" height={44} />
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70 font-medium mb-1.5">
+                Vendas
+              </div>
+              <Sparkline values={purchasesSeries} color="#34d399" height={44} />
+            </div>
+            <div>
+              <div className="text-[10px] uppercase tracking-[0.1em] text-muted-foreground/70 font-medium mb-1.5">
+                CPA
+              </div>
+              <Sparkline values={cpaSeries} color="#fbbf24" height={44} />
+            </div>
+          </div>
+        ) : (
+          <p className="font-mono text-xs text-muted-foreground/60 text-center py-4 lowercase">
+            sem atividade nos últimos 14 dias
+          </p>
+        )}
       </div>
     </div>
   );

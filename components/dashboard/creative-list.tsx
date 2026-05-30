@@ -109,13 +109,23 @@ export function CreativeList({ ads, basePath, activeAdId }: CreativeListProps) {
 
               {/* Name + stats */}
               <div className="min-w-0 flex-1">
-                <div
-                  className={`text-[13px] font-medium truncate ${
-                    active ? "text-foreground" : "text-foreground/90"
-                  }`}
-                  title={ad.adName}
-                >
-                  {ad.adName}
+                <div className="flex items-center gap-1.5">
+                  <div
+                    className={`text-[13px] font-medium truncate ${
+                      active ? "text-foreground" : "text-foreground/90"
+                    }`}
+                    title={ad.adName}
+                  >
+                    {ad.adName}
+                  </div>
+                  {ad.status !== "ACTIVE" ? (
+                    <span
+                      className="shrink-0 font-mono text-[9px] tracking-wide lowercase px-1 py-0.5 rounded border border-amber-500/40 text-amber-300/90 bg-amber-500/10"
+                      title={`Status no Meta: ${ad.status.toLowerCase()}`}
+                    >
+                      {ad.status.toLowerCase()}
+                    </span>
+                  ) : null}
                 </div>
                 <div className="flex items-center gap-3 mt-1 font-mono tabular-nums text-[10px] text-muted-foreground/70">
                   <span>

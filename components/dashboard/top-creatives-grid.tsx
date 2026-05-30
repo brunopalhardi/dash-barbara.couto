@@ -5,28 +5,27 @@ import { fmt } from "./format";
 import type { AdRow } from "@/lib/queries/dashboard";
 
 interface TopCreativesGridProps {
+  /** Já vem ordenado por CPA crescente, só ativos e com venda — vide getTopAds */
   ads: AdRow[];
   limit?: number;
   /** Base href pra rota de detalhe (ex.: "/desafio/criativo"). Sem trailing slash. */
   basePath: string;
 }
 
-function roasColor(roas: number): string {
-  if (roas >= 2) return "text-emerald-400 bg-emerald-500/10 border-emerald-500/30";
-  if (roas >= 1) return "text-amber-400 bg-amber-500/10 border-amber-500/30";
+function cpaColor(cpa: number): string {
+  // Alvo prático: CAC ≤ R$150 no infoproduto do Bruno
+  if (cpa > 0 && cpa <= 150) return "text-emerald-400 bg-emerald-500/10 border-emerald-500/30";
+  if (cpa > 0 && cpa <= 250) return "text-amber-400 bg-amber-500/10 border-amber-500/30";
   return "text-rose-400 bg-rose-500/10 border-rose-500/30";
 }
 
 export function TopCreativesGrid({ ads, limit = 5, basePath }: TopCreativesGridProps) {
-  const top = [...ads]
-    .filter((a) => a.spend > 0)
-    .sort((a, b) => b.spend - a.spend)
-    .slice(0, limit);
+  const top = ads.slice(0, limit);
 
   if (top.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-6 text-center">
-        Sem criativos com gasto no período.
+        Sem criativos ativos com venda no período.
       </p>
     );
   }
@@ -35,7 +34,6 @@ export function TopCreativesGrid({ ads, limit = 5, basePath }: TopCreativesGridP
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
       {top.map((ad) => {
         const roas = ad.spend > 0 ? ad.revenue / ad.spend : 0;
-        const ctr = ad.impressions > 0 ? (ad.clicks / ad.impressions) * 100 : 0;
         return (
           <Link
             key={ad.adId}
@@ -57,10 +55,11 @@ export function TopCreativesGrid({ ads, limit = 5, basePath }: TopCreativesGridP
               <span
                 className={cn(
                   "absolute top-2 right-2 px-1.5 py-0.5 text-[10px] rounded border font-semibold tabular-nums",
-                  roasColor(roas),
+                  cpaColor(ad.cpa),
                 )}
+                title="Custo por venda no período"
               >
-                {fmt.ratio(roas)}
+                {fmt.money(ad.cpa)}
               </span>
               <ExternalLink className="absolute top-2 left-2 h-3.5 w-3.5 text-foreground/0 group-hover:text-foreground/80 transition-colors" />
             </div>
@@ -69,12 +68,12 @@ export function TopCreativesGrid({ ads, limit = 5, basePath }: TopCreativesGridP
                 {ad.adName}
               </div>
               <div className="text-[10px] text-muted-foreground tabular-nums flex justify-between">
-                <span>{fmt.int(ad.impressions, true)} imp</span>
-                <span>CTR {fmt.pct(ctr, 1)}</span>
+                <span>{fmt.int(ad.purchases)} vendas</span>
+                <span>ROAS {fmt.ratio(roas)}</span>
               </div>
               <div className="text-[10px] text-muted-foreground tabular-nums flex justify-between">
-                <span>{fmt.money(ad.spend)}</span>
-                <span>{fmt.int(ad.purchases)} vendas</span>
+                <span>{fmt.money(ad.spend)} gasto</span>
+                <span>{fmt.int(ad.leads)} leads</span>
               </div>
             </div>
           </Link>

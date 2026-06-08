@@ -11,6 +11,10 @@
     {
       "path": "/api/sync/sendflow",
       "schedule": "30 6 * * *"
+    },
+    {
+      "path": "/api/sync/vturb",
+      "schedule": "0 8 * * *"
     }
   ]
 }

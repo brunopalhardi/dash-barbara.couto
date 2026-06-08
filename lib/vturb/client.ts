@@ -77,7 +77,7 @@ export function createVturbClient(cfg: VturbClientConfig): VturbClient {
           throw new Error(`VTurb error ${res.status} após retries`);
         }
         const text = await res.text();
-        return JSON.parse(text) as T;
+        return (text ? JSON.parse(text) : null) as T;
       } catch (e) {
         clearTimeout(timer);
         lastErr = e;

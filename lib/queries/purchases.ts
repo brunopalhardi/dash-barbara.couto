@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { purchases } from "@/lib/schema/purchases";
 import {
@@ -8,6 +8,22 @@ import {
 } from "@/lib/schema/whatsapp";
 import type { ProductSlug } from "@/lib/products";
 import type { DateRange } from "./dashboard";
+
+const TZ = "America/Sao_Paulo";
+
+/**
+ * Filtra purchased_at pelo dia-calendário em fuso BR (America/Sao_Paulo).
+ *
+ * `purchased_at` é timestamptz (instante UTC). Comparar contra `new Date(...)`
+ * sem fuso usava o fuso local do processo — na Vercel (UTC) isso jogava compras
+ * da madrugada UTC (= noite do dia anterior em BR) pro dia seguinte. Aqui a
+ * gente converte o instante pro relógio de parede BR e compara a data, igual ao
+ * bucketing diário de `getDailyPurchaseSeries`. Resultado independe do fuso do
+ * processo.
+ */
+function inRangeBR(range: DateRange) {
+  return sql`(${purchases.purchasedAt} at time zone ${TZ})::date between ${range.from}::date and ${range.to}::date`;
+}
 
 export interface BuyerRow {
   transactionId: string;
@@ -29,9 +45,6 @@ export async function getBuyersForCycle(
   productSlug: ProductSlug,
   range: DateRange,
 ): Promise<BuyerRow[]> {
-  const from = new Date(range.from + "T00:00:00");
-  const to = new Date(range.to + "T23:59:59");
-
   const rows = await db
     .select({
       transactionId: purchases.transactionId,
@@ -56,8 +69,7 @@ export async function getBuyersForCycle(
       and(
         eq(purchases.productSlug, productSlug),
         eq(purchases.status, "approved"),
-        gte(purchases.purchasedAt, from),
-        lte(purchases.purchasedAt, to),
+        inRangeBR(range),
       ),
     )
     .orderBy(sql`${purchases.purchasedAt} desc`);
@@ -80,8 +92,6 @@ export async function getApprovedPurchaseCount(
   productSlug: ProductSlug,
   range: DateRange,
 ): Promise<number> {
-  const from = new Date(range.from + "T00:00:00");
-  const to = new Date(range.to + "T23:59:59");
   const [row] = await db
     .select({ n: sql<number>`count(*)::int` })
     .from(purchases)
@@ -89,8 +99,7 @@ export async function getApprovedPurchaseCount(
       and(
         eq(purchases.productSlug, productSlug),
         eq(purchases.status, "approved"),
-        gte(purchases.purchasedAt, from),
-        lte(purchases.purchasedAt, to),
+        inRangeBR(range),
       ),
     );
   return Number(row?.n ?? 0);
@@ -103,8 +112,6 @@ export async function getApprovedPurchaseRevenue(
   productSlug: ProductSlug,
   range: DateRange,
 ): Promise<number> {
-  const from = new Date(range.from + "T00:00:00");
-  const to = new Date(range.to + "T23:59:59");
   const [row] = await db
     .select({
       cents: sql<number>`coalesce(sum(${purchases.valueCents}), 0)::int`,
@@ -114,8 +121,7 @@ export async function getApprovedPurchaseRevenue(
       and(
         eq(purchases.productSlug, productSlug),
         eq(purchases.status, "approved"),
-        gte(purchases.purchasedAt, from),
-        lte(purchases.purchasedAt, to),
+        inRangeBR(range),
       ),
     );
   return Number(row?.cents ?? 0) / 100;
@@ -134,8 +140,6 @@ export async function getInGroupStats(
   productSlug: ProductSlug,
   range: DateRange,
 ): Promise<InGroupStats> {
-  const from = new Date(range.from + "T00:00:00");
-  const to = new Date(range.to + "T23:59:59");
   const [row] = await db
     .select({
       withPhone: sql<number>`count(*) filter (where ${purchases.buyerPhoneE164} is not null)::int`,
@@ -150,8 +154,7 @@ export async function getInGroupStats(
       and(
         eq(purchases.productSlug, productSlug),
         eq(purchases.status, "approved"),
-        gte(purchases.purchasedAt, from),
-        lte(purchases.purchasedAt, to),
+        inRangeBR(range),
       ),
     );
   return {
@@ -174,8 +177,6 @@ export async function getDailyPurchaseSeries(
   productSlug: ProductSlug,
   range: DateRange,
 ): Promise<DailyPurchasePoint[]> {
-  const from = new Date(range.from + "T00:00:00");
-  const to = new Date(range.to + "T23:59:59");
   const rows = await db
     .select({
       date: sql<string>`to_char(${purchases.purchasedAt} at time zone 'America/Sao_Paulo', 'YYYY-MM-DD')`,
@@ -187,8 +188,7 @@ export async function getDailyPurchaseSeries(
       and(
         eq(purchases.productSlug, productSlug),
         eq(purchases.status, "approved"),
-        gte(purchases.purchasedAt, from),
-        lte(purchases.purchasedAt, to),
+        inRangeBR(range),
       ),
     )
     .groupBy(

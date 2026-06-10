@@ -176,6 +176,56 @@ describe("getDailyPurchaseSeries", () => {
   });
 });
 
+describe("filtro de período em fuso America/Sao_Paulo", () => {
+  // Janela do dia 02/06/2030 no calendário BR.
+  const RANGE = { from: "2030-06-02", to: "2030-06-02" };
+
+  beforeAll(async () => {
+    await db.delete(purchases).where(eq(purchases.transactionId, "TZ-PREV"));
+    await db.delete(purchases).where(eq(purchases.transactionId, "TZ-SAME"));
+    await db.insert(purchases).values([
+      {
+        // 2030-06-02 02:00 UTC = 2030-06-01 23:00 BRT → dia 01/06 em SP.
+        // Em UTC cai em 02/06; só deve contar se o filtro respeitar o fuso BR.
+        transactionId: "TZ-PREV",
+        productSlug: "guia",
+        status: "approved",
+        buyerName: "Borderline Noite",
+        valueCents: 29700,
+        purchasedAt: new Date("2030-06-02T02:00:00Z"),
+        rawPayload: {},
+      },
+      {
+        // 2030-06-02 12:00 UTC = 2030-06-02 09:00 BRT → dia 02/06 em ambos.
+        transactionId: "TZ-SAME",
+        productSlug: "guia",
+        status: "approved",
+        buyerName: "Manhã Clara",
+        valueCents: 29700,
+        purchasedAt: new Date("2030-06-02T12:00:00Z"),
+        rawPayload: {},
+      },
+    ]);
+  });
+
+  afterAll(async () => {
+    await db.delete(purchases).where(eq(purchases.transactionId, "TZ-PREV"));
+    await db.delete(purchases).where(eq(purchases.transactionId, "TZ-SAME"));
+  });
+
+  it("inclui compra do dia BR e exclui a da véspera BR (madrugada UTC)", async () => {
+    const buyers = await getBuyersForCycle("guia", RANGE);
+    const ids = new Set(buyers.map((b) => b.transactionId));
+    expect(ids.has("TZ-SAME")).toBe(true);
+    expect(ids.has("TZ-PREV")).toBe(false);
+  });
+
+  it("conta só a compra cujo dia BR cai no período", async () => {
+    const count = await getApprovedPurchaseCount("guia", RANGE);
+    expect(count).toBe(1);
+  });
+});
+
 describe("getBuyerJourney", () => {
   it("retorna compras do mesmo telefone (lookup por phone)", async () => {
     const result = await getBuyerJourney({ phone: "5511111111111" });

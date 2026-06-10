@@ -29,8 +29,17 @@ function whatsappLink(e164: string | null): string | null {
   return e164 ? `https://wa.me/${e164}` : null;
 }
 
+// Data-calendário em fuso BR (America/Sao_Paulo), consistente com o filtro de
+// período. toISOString() daria a data em UTC — uma compra à noite no BR (=
+// madrugada UTC do dia seguinte) apareceria no dia errado.
+const dateFmtBR = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "America/Sao_Paulo",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
 function dateOnly(d: Date | string): string {
-  return typeof d === "string" ? d.slice(0, 10) : d.toISOString().slice(0, 10);
+  return dateFmtBR.format(typeof d === "string" ? new Date(d) : d);
 }
 
 function hashHue(s: string): number {

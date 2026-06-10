@@ -38,10 +38,27 @@ function dayOfWeek(iso: string): number {
   return parseISO(iso).getUTCDay();
 }
 
-function addDays(iso: string, n: number): string {
+export function addDays(iso: string, n: number): string {
   const d = parseISO(iso);
   d.setUTCDate(d.getUTCDate() + n);
   return toISO(d);
+}
+
+/** Diferença em dias inteiros entre duas datas ISO (to - from). */
+export function diffDays(fromISO: string, toISO_: string): number {
+  return Math.round((parseISO(toISO_).getTime() - parseISO(fromISO).getTime()) / 86_400_000);
+}
+
+/** Últimos N dias terminando hoje (fuso BR). `today` injetável pra teste. */
+export function rangeLastDays(days: number, today = todayBR()): DateRange {
+  return { from: addDays(today, -(days - 1)), to: today };
+}
+
+/** Período imediatamente anterior, de mesmo tamanho, sem overlap. */
+export function rangePreviousPeriod(range: DateRange): DateRange {
+  const days = diffDays(range.from, range.to) + 1;
+  const prevTo = addDays(range.from, -1);
+  return { from: addDays(prevTo, -(days - 1)), to: prevTo };
 }
 
 /** Segunda da semana corrente → hoje. */

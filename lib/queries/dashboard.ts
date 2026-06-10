@@ -3,6 +3,12 @@ import { db } from "@/lib/db";
 import { adInsightsDaily } from "@/lib/schema/insights";
 import { ads, adsets, campaigns, adAccounts, creatives } from "@/lib/schema/meta";
 import { detectProduct, getProduct, PRODUCTS, type Product, type ProductSlug } from "@/lib/products";
+import {
+  todayBR,
+  addDays as addDaysISO,
+  rangeLastDays as rangeLastDaysBR,
+  rangePreviousPeriod as rangePreviousPeriodBR,
+} from "@/lib/utils/date-ranges";
 
 export interface DateRange {
   /** ISO date YYYY-MM-DD inclusive */
@@ -330,7 +336,7 @@ function addDays(d: Date, n: number): Date {
 }
 
 /**
- * Range "ciclo atual" = últimos `cycleDays` dias terminando hoje.
+ * Range "ciclo atual" = últimos `cycleDays` dias terminando hoje (fuso BR).
  * Se `customStart`+`customEnd` forem passados, ignora cycleDays e usa o intervalo direto.
  */
 export function rangeCurrentCycle(
@@ -338,20 +344,13 @@ export function rangeCurrentCycle(
   custom?: { start: string; end: string },
 ): DateRange {
   if (custom) return { from: custom.start, to: custom.end };
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const from = addDays(today, -(cycleDays - 1));
-  return { from: dateISO(from), to: dateISO(today) };
+  const today = todayBR();
+  return { from: addDaysISO(today, -(cycleDays - 1)), to: today };
 }
 
 /** Range do ciclo anterior (de mesmo tamanho) ao atual. */
 export function rangePreviousCycle(currentRange: DateRange): DateRange {
-  const fromCurr = new Date(currentRange.from + "T00:00:00");
-  const toCurr = new Date(currentRange.to + "T00:00:00");
-  const days = Math.round((toCurr.getTime() - fromCurr.getTime()) / 86400000) + 1;
-  const prevTo = addDays(fromCurr, -1);
-  const prevFrom = addDays(prevTo, -(days - 1));
-  return { from: dateISO(prevFrom), to: dateISO(prevTo) };
+  return rangePreviousPeriodBR(currentRange);
 }
 
 /**
@@ -372,8 +371,8 @@ export async function getCycleOverlay(
 ): Promise<CycleOverlayPoint[]> {
   const customDays = opts.custom
     ? Math.round(
-        (new Date(opts.custom.end + "T00:00:00").getTime() -
-          new Date(opts.custom.start + "T00:00:00").getTime()) /
+        (new Date(opts.custom.end + "T12:00:00Z").getTime() -
+          new Date(opts.custom.start + "T12:00:00Z").getTime()) /
           86400000,
       ) + 1
     : null;
@@ -384,7 +383,7 @@ export async function getCycleOverlay(
 
   // Range total: do início do ciclo mais antigo até o fim do ciclo atual
   const oldestStart = addDays(
-    new Date(current.from + "T00:00:00"),
+    new Date(current.from + "T12:00:00Z"),
     -cycleDays * cyclesBack,
   );
   const fullRange: DateRange = {
@@ -393,10 +392,10 @@ export async function getCycleOverlay(
   };
 
   const series = await getDailySeries(slug, fullRange);
-  const currentStart = new Date(current.from + "T00:00:00");
+  const currentStart = new Date(current.from + "T12:00:00Z");
 
   return series.map((p) => {
-    const d = new Date(p.date + "T00:00:00");
+    const d = new Date(p.date + "T12:00:00Z");
     const diffDays = Math.floor((currentStart.getTime() - d.getTime()) / 86400000);
     // ciclo 0 = atual; ciclo 1 = anterior; …
     const cycleOffset = diffDays < 0 ? 0 : Math.floor(diffDays / cycleDays) + (diffDays % cycleDays === 0 ? 0 : 0);
@@ -506,42 +505,18 @@ export async function getTopAds(
 }
 
 /* ─────────────────────────────────────────────────────────────────────── */
-// Helpers de range de datas (timezone SP simplificado)
+// Helpers de range — delegam pro lib/utils/date-ranges (fuso BR correto).
 
 export function todayISO(): string {
-  return new Date().toISOString().slice(0, 10);
+  return todayBR();
 }
 
 export function rangeLastDays(days: number): DateRange {
-  const to = new Date();
-  const from = new Date();
-  from.setDate(to.getDate() - (days - 1));
-  return { from: from.toISOString().slice(0, 10), to: to.toISOString().slice(0, 10) };
+  return rangeLastDaysBR(days);
 }
 
 export function rangePreviousPeriod(range: DateRange): DateRange {
-  const from = new Date(range.from + "T00:00:00");
-  const to = new Date(range.to + "T00:00:00");
-  const days = Math.round((to.getTime() - from.getTime()) / 86400000) + 1;
-  const prevTo = new Date(from);
-  prevTo.setDate(from.getDate() - 1);
-  const prevFrom = new Date(prevTo);
-  prevFrom.setDate(prevTo.getDate() - (days - 1));
-  return {
-    from: prevFrom.toISOString().slice(0, 10),
-    to: prevTo.toISOString().slice(0, 10),
-  };
-}
-
-export function rangeCurrentWeek(): DateRange {
-  const today = new Date();
-  const dow = (today.getDay() + 6) % 7;
-  const monday = new Date(today);
-  monday.setDate(today.getDate() - dow);
-  return {
-    from: monday.toISOString().slice(0, 10),
-    to: today.toISOString().slice(0, 10),
-  };
+  return rangePreviousPeriodBR(range);
 }
 
 /* ─────────────────────────────────────────────────────────────────────── */

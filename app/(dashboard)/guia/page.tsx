@@ -9,6 +9,8 @@ import {
   getApprovedPurchaseRevenue,
   getBuyersForCycle,
   getDailyPurchaseSeries,
+  getRevenueByCampaignName,
+  getRevenueSplit,
 } from "@/lib/queries/purchases";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { ActiveToggle } from "@/components/dashboard/active-toggle";
@@ -91,6 +93,7 @@ export default async function GuiaPage({
     buyers,
     dailyFunnel, campaignFunnel, creativeFunnel, pageFunnel,
     videoPages, pageFunnelActive,
+    split, revByCampaign,
   ] = await Promise.all([
     getKpis("guia", currentRange),
     getApprovedPurchaseCount("guia", currentRange),
@@ -109,7 +112,16 @@ export default async function GuiaPage({
     getPageFunnel("guia", currentRange, { onlyActive }),
     getActivePagesWithVideo("guia", currentRange),
     getPageFunnel("guia", currentRange, { onlyActive: true }),
+    getRevenueSplit("guia", currentRange),
+    getRevenueByCampaignName("guia", currentRange),
   ]);
+
+  // Enriquece cada campanha com a receita Hotmart atribuída por nome (match via
+  // c= do sck) e o ROAS real (receita Hotmart / gasto da linha).
+  const campaignFunnelEnriched = campaignFunnel.map((c) => {
+    const hotRevenue = revByCampaign.get(c.campaignName.toUpperCase()) ?? 0;
+    return { ...c, hotRevenue, roasReal: c.spend > 0 ? hotRevenue / c.spend : 0 };
+  });
 
   // Junta vídeo (VTurb, por URL normalizada) com gasto/venda (Meta, pixel) das
   // páginas ativas. A tabela é sempre sobre páginas ativas, então usa
@@ -192,6 +204,7 @@ export default async function GuiaPage({
           label="Receita"
           value={fmt.money(revenueHot)}
           delta={compare ? deltaOf(revenueHot, prevRevenueHot) : null}
+          hint={`tráfego ${fmt.money(split.trafego)} · org ${fmt.money(split.organico)} · s/atrib ${fmt.money(split.semAtribuicao)}`}
         />
         <KpiCard
           label="CAC"
@@ -272,7 +285,7 @@ export default async function GuiaPage({
               })),
             )}
           />
-          <FunnelTableCampaign rows={campaignFunnel} />
+          <FunnelTableCampaign rows={campaignFunnelEnriched} />
         </CardContent>
       </Card>
 

@@ -65,3 +65,21 @@ export const CLIENT_PRODUCTS: Product[] = [
     hasWhatsAppGroup: false,
   },
 ];
+
+/**
+ * Allowlist de contas de anúncio Meta exibidas/sincronizadas.
+ *
+ * O system user token enxerga TODAS as contas do BM do Bruno (44+, de vários
+ * clientes). Aqui restringimos às contas DESTE cliente, por nome. null = sem
+ * filtro (mostra todas — usar no OBA, que tem BM próprio).
+ *
+ * Barbara Couto: contas "Bárbara Couto" (CA01/CA02/CA03, BACKUP, CONTEÚDOS) e
+ * "Shiatsu Medicine" (outra marca do cliente). Pega acento e maiúsc/minúsc.
+ */
+export const META_ACCOUNT_ALLOWLIST: RegExp | null =
+  /b[áa]rbara\s+couto|shiatsu\s+medicine/i;
+
+/** true se a conta (pelo nome) pode aparecer/sincronizar neste cliente. */
+export function isAllowedMetaAccount(name: string): boolean {
+  return META_ACCOUNT_ALLOWLIST === null || META_ACCOUNT_ALLOWLIST.test(name);
+}

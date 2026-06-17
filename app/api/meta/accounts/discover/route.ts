@@ -3,6 +3,7 @@ import { createClient as createSupabase } from "@/lib/supabase/server";
 import { createMetaClient } from "@/lib/meta/client";
 import { db } from "@/lib/db";
 import { adAccounts } from "@/lib/schema/meta";
+import { isAllowedMetaAccount } from "@/lib/client-config";
 
 export const dynamic = "force-dynamic";
 
@@ -18,6 +19,8 @@ export async function GET() {
   const apiAccounts = await client.getAdAccounts();
 
   for (const a of apiAccounts) {
+    // Só contas deste cliente (o token enxerga o BM inteiro). Ver client-config.
+    if (!isAllowedMetaAccount(a.name)) continue;
     await db
       .insert(adAccounts)
       .values({
@@ -30,6 +33,8 @@ export async function GET() {
       .onConflictDoNothing({ target: adAccounts.metaAccountId });
   }
 
-  const all = await db.select().from(adAccounts);
+  const all = (await db.select().from(adAccounts)).filter((a) =>
+    isAllowedMetaAccount(a.name),
+  );
   return NextResponse.json({ accounts: all });
 }

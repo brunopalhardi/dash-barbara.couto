@@ -8,6 +8,7 @@ import type { DatePreset, MetaCreative, MetaInsight, MetaInsightAction } from "@
 import { extractLandingUrl } from "@/lib/meta/extractors";
 import { MetaAuthError } from "@/lib/meta/errors";
 import { detectProduct } from "@/lib/products";
+import { isAllowedMetaAccount } from "@/lib/client-config";
 
 /**
  * Job órfão = "running" há mais que ORPHAN_THRESHOLD_MS. O Vercel mata a função
@@ -215,10 +216,9 @@ export async function syncMeta(
     .values({ type: jobType, status: "running", startedAt: new Date() })
     .returning({ id: syncJobs.id });
 
-  const activeAccounts = await db
-    .select()
-    .from(adAccounts)
-    .where(eq(adAccounts.isActive, true));
+  const activeAccounts = (
+    await db.select().from(adAccounts).where(eq(adAccounts.isActive, true))
+  ).filter((a) => isAllowedMetaAccount(a.name));
 
   const results: AccountSyncResult[] = [];
 

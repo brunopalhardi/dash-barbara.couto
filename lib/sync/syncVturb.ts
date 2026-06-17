@@ -4,7 +4,7 @@ import { ads, adsets, campaigns, adAccounts } from "@/lib/schema/meta";
 import {
   vturbPlayers, vturbPages, vturbPagePlayers, vturbPageDaily, vturbRetentionDaily,
 } from "@/lib/schema/vturb";
-import { getProduct } from "@/lib/products";
+import { getProduct, type ProductSlug } from "@/lib/products";
 import { normalizePageUrl, fetchPlayerIds, type ScrapeResult } from "@/lib/vturb/scrape";
 import { aggregatePageDay, normalizeCurve, mergeCurves } from "@/lib/vturb/aggregate";
 import type { VturbClient } from "@/lib/vturb/client";
@@ -18,7 +18,7 @@ export interface SyncVturbDeps {
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
   range: { from: string; to: string };
-  productSlug?: "guia";
+  productSlug?: ProductSlug;
 }
 
 export interface SyncVturbResult {
@@ -44,7 +44,9 @@ export async function syncVturb(deps: SyncVturbDeps): Promise<SyncVturbResult> {
   const db = deps.db ?? defaultDb;
   const fetchImpl = deps.fetchImpl ?? fetch;
   const sleep = deps.sleep ?? ((ms) => new Promise((r) => setTimeout(r, ms)));
-  const slug = deps.productSlug ?? "guia";
+  // VTurb é código morto neste fork (Barbara não usa VSL): sem cron, sem rota,
+  // sem nav. Default mantido só pra compilar. Ver follow-up de remoção do VTurb.
+  const slug = deps.productSlug ?? "desafio";
   const product = getProduct(slug);
   const result: SyncVturbResult = {
     pagesActive: 0, pagesMapped: 0, pagesNoEmbed: 0, pagesHttpError: 0,

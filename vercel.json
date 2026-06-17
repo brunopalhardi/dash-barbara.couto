@@ -13,10 +13,6 @@
       "schedule": "30 6 * * *"
     },
     {
-      "path": "/api/sync/vturb",
-      "schedule": "0 8 * * *"
-    },
-    {
       "path": "/api/sync/refresh-weekly",
       "schedule": "0 7 * * 1"
     }

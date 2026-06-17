@@ -96,15 +96,11 @@ interface HotmartProduct {
 
 const HOTMART_PRODUCTS: HotmartProduct[] = [
   {
-    slug: "guia",
-    hotmartIds: ["6753137"],
-    names: ["GUIA ALZHEIMER - O PRIMEIRO PASSO PARA CUIDAR"],
-  },
-  {
     slug: "desafio",
-    hotmartIds: ["7523998"],
-    names: ["Desafio O Bom do Alzheimer"],
+    hotmartIds: ["7206438"],
+    names: ["Kit Imersão 7 dias - Cura nas tuas Mãos"],
   },
+  // Futuro: Low Ticket e Despertar entram aqui quando ligarmos os produtos.
 ];
 
 /**

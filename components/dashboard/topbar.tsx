@@ -11,7 +11,6 @@ import { cn } from "@/lib/utils";
 const LABELS: Record<string, string> = {
   "": "Visão Geral",
   desafio: "Desafio",
-  guia: "Guia",
   settings: "Configurações",
   integrations: "Integrações",
   criativo: "Criativo",

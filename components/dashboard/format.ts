@@ -1,16 +1,20 @@
-const brl = new Intl.NumberFormat("pt-BR", {
+import { DISPLAY_CURRENCY, DISPLAY_LOCALE } from "@/lib/client-config";
+
+// Moeda/locale de exibição vêm do client-config (Barbara = EUR/pt-PT). Os valores
+// já chegam convertidos pra DISPLAY_CURRENCY nas queries (ver lib/queries/fx.ts).
+const brl = new Intl.NumberFormat(DISPLAY_LOCALE, {
   style: "currency",
-  currency: "BRL",
+  currency: DISPLAY_CURRENCY,
   maximumFractionDigits: 2,
 });
-const brlCompact = new Intl.NumberFormat("pt-BR", {
+const brlCompact = new Intl.NumberFormat(DISPLAY_LOCALE, {
   style: "currency",
-  currency: "BRL",
+  currency: DISPLAY_CURRENCY,
   notation: "compact",
   maximumFractionDigits: 1,
 });
-const intFmt = new Intl.NumberFormat("pt-BR", { maximumFractionDigits: 0 });
-const intCompact = new Intl.NumberFormat("pt-BR", {
+const intFmt = new Intl.NumberFormat(DISPLAY_LOCALE, { maximumFractionDigits: 0 });
+const intCompact = new Intl.NumberFormat(DISPLAY_LOCALE, {
   notation: "compact",
   maximumFractionDigits: 1,
 });

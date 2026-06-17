@@ -83,3 +83,27 @@ export const META_ACCOUNT_ALLOWLIST: RegExp | null =
 export function isAllowedMetaAccount(name: string): boolean {
   return META_ACCOUNT_ALLOWLIST === null || META_ACCOUNT_ALLOWLIST.test(name);
 }
+
+/**
+ * Moeda única de exibição do dash + locale de formatação.
+ *
+ * Barbara Couto opera multi-moeda: gasto Meta em GBP (contas UK Ltd), vendas
+ * Hotmart na moeda de cada comprador (94% EUR, resto CHF/GBP/USD/BRL). Decisão
+ * (Olinda, 2026-06-17): mostrar TUDO em EUR. A conversão pra EUR acontece nas
+ * queries via FX_TO_EUR (ver lib/queries/fx.ts).
+ */
+export const DISPLAY_CURRENCY = "EUR";
+export const DISPLAY_LOCALE = "pt-PT"; // 1.234,56 €
+
+/**
+ * Taxas pra converter cada moeda → EUR (multiplica o valor nativo).
+ * ⚠️ Aproximadas (jun/2026) — AJUSTAR com a taxa que a Olinda usa.
+ * A que mais importa é GBP (todo o gasto é GBP). As outras são <6% das vendas.
+ */
+export const FX_TO_EUR: Record<string, number> = {
+  EUR: 1,
+  GBP: 1.17,
+  CHF: 1.05,
+  USD: 0.92,
+  BRL: 0.18,
+};

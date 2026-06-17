@@ -10,6 +10,7 @@ import {
 } from "@/lib/schema";
 import { getProduct, type ProductSlug } from "@/lib/products";
 import { productScopeWhere } from "./product-scope";
+import { sumToEur } from "./fx";
 import type { DateRange } from "./dashboard";
 
 export interface FunnelOptions {
@@ -59,7 +60,7 @@ export async function getDailyFunnel(
       impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
       clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
       linkClicks: sql<number>`coalesce(sum(${adInsightsDaily.linkClicks})::int, 0)`,
-      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+      spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
       lpv: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'landing_page_view')::int), 0)`,
       chkt: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'initiate_checkout')::int), 0)`,
       purchase: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::int), 0)`,
@@ -133,7 +134,7 @@ export async function getCampaignFunnel(
       impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
       clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
       linkClicks: sql<number>`coalesce(sum(${adInsightsDaily.linkClicks})::int, 0)`,
-      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+      spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
       reach: sql<number>`coalesce(sum(${adInsightsDaily.reach})::int, 0)`,
       lpv: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'landing_page_view')::int), 0)`,
       chkt: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'initiate_checkout')::int), 0)`,
@@ -203,7 +204,7 @@ export async function getCreativeFunnel(
       landingUrl: ads.landingUrl,
       impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
       clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
-      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+      spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
       purchase: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::int), 0)`,
     })
     .from(adInsightsDaily)
@@ -260,7 +261,7 @@ export async function getPageFunnel(
       landingUrl: ads.landingUrl,
       impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
       clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
-      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+      spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
       lpv: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'landing_page_view')::int), 0)`,
       chkt: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'initiate_checkout')::int), 0)`,
       purchase: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::int), 0)`,

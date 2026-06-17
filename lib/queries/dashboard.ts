@@ -4,6 +4,7 @@ import { adInsightsDaily } from "@/lib/schema/insights";
 import { ads, adsets, campaigns, adAccounts, creatives } from "@/lib/schema/meta";
 import { getProduct, PRODUCTS, type ProductSlug } from "@/lib/products";
 import { productScopeWhere } from "./product-scope";
+import { sumToEur, toEur } from "./fx";
 import {
   todayBR,
   addDays as addDaysISO,
@@ -145,13 +146,13 @@ export async function getKpis(slug: ProductSlug, range: DateRange): Promise<Kpis
 
   const [row] = await db
     .select({
-      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+      spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
       impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
       clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
       reach: sql<number>`coalesce(sum(${adInsightsDaily.reach})::int, 0)`,
       leads: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'lead')::float), 0)`,
       purchases: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::float), 0)`,
-      revenue: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'revenue')::float), 0)`,
+      revenue: sumToEur(sql`(${adInsightsDaily.conversions}->>'revenue')::float`, adAccounts.currency),
       follows: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'follow')::float), 0)`,
       engagement: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'engagement')::float), 0)`,
     })
@@ -199,8 +200,8 @@ export async function getDailySeries(slug: ProductSlug, range: DateRange): Promi
   const rows = await db
     .select({
       date: adInsightsDaily.date,
-      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
-      revenue: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'revenue')::float), 0)`,
+      spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
+      revenue: sumToEur(sql`(${adInsightsDaily.conversions}->>'revenue')::float`, adAccounts.currency),
       leads: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'lead')::float), 0)`,
       purchases: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::float), 0)`,
       impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
@@ -234,15 +235,16 @@ export async function getProductBreakdown(range: DateRange): Promise<ProductBrea
   const rows = await db
     .select({
       productSlug: campaigns.productSlug,
-      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+      spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
       leads: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'lead')::float), 0)`,
       purchases: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::float), 0)`,
-      revenue: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'revenue')::float), 0)`,
+      revenue: sumToEur(sql`(${adInsightsDaily.conversions}->>'revenue')::float`, adAccounts.currency),
     })
     .from(adInsightsDaily)
     .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
     .innerJoin(adsets, eq(adsets.id, ads.adsetId))
     .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
+    .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
     .where(and(gte(adInsightsDaily.date, range.from), lte(adInsightsDaily.date, range.to)))
     .groupBy(campaigns.productSlug);
 
@@ -417,12 +419,12 @@ export async function getTopAds(
       adStatus: ads.status,
       campaignName: campaigns.name,
       thumbnailUrl: creatives.thumbnailUrl,
-      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+      spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
       impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
       clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
       leads: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'lead')::float), 0)`,
       purchases: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::float), 0)`,
-      revenue: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'revenue')::float), 0)`,
+      revenue: sumToEur(sql`(${adInsightsDaily.conversions}->>'revenue')::float`, adAccounts.currency),
     })
     .from(adInsightsDaily)
     .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
@@ -555,12 +557,12 @@ export async function getHierarchyTable(
   ];
 
   const insightsExpr = {
-    spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+    spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
     impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
     clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
     leads: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'lead')::float), 0)`,
     purchases: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::float), 0)`,
-    revenue: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'revenue')::float), 0)`,
+    revenue: sumToEur(sql`(${adInsightsDaily.conversions}->>'revenue')::float`, adAccounts.currency),
   };
 
   let rows: Array<Omit<HierarchyRow, "cpa" | "cpl" | "ctr" | "roas" | "profit">> = [];
@@ -698,12 +700,12 @@ export async function getAdDetail(
       adsetDailyBudget: sql<string | null>`${adsets.dailyBudget}`,
       adsetOptimizationGoal: adsets.optimizationGoal,
       accountMetaId: adAccounts.metaAccountId,
-      spend: sql<number>`coalesce(sum(${adInsightsDaily.spend})::float, 0)`,
+      spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
       impressions: sql<number>`coalesce(sum(${adInsightsDaily.impressions})::int, 0)`,
       clicks: sql<number>`coalesce(sum(${adInsightsDaily.clicks})::int, 0)`,
       leads: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'lead')::float), 0)`,
       purchases: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'purchase')::float), 0)`,
-      revenue: sql<number>`coalesce(sum((${adInsightsDaily.conversions}->>'revenue')::float), 0)`,
+      revenue: sumToEur(sql`(${adInsightsDaily.conversions}->>'revenue')::float`, adAccounts.currency),
       videoViews: sql<number>`coalesce(sum(${adInsightsDaily.videoViews})::int, 0)`,
       video3s: sql<number>`coalesce(sum(${adInsightsDaily.videoP3s})::int, 0)`,
       video25: sql<number>`coalesce(sum(${adInsightsDaily.videoP25})::int, 0)`,
@@ -769,12 +771,16 @@ export async function getAdDetail(
   const dailyRows = await db
     .select({
       date: adInsightsDaily.date,
-      spend: sql<number>`coalesce(${adInsightsDaily.spend}::float, 0)`,
+      spend: toEur(adInsightsDaily.spend, adAccounts.currency),
       leads: sql<number>`coalesce((${adInsightsDaily.conversions}->>'lead')::float, 0)`,
       purchases: sql<number>`coalesce((${adInsightsDaily.conversions}->>'purchase')::float, 0)`,
-      revenue: sql<number>`coalesce((${adInsightsDaily.conversions}->>'revenue')::float, 0)`,
+      revenue: toEur(sql`(${adInsightsDaily.conversions}->>'revenue')::float`, adAccounts.currency),
     })
     .from(adInsightsDaily)
+    .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
+    .innerJoin(adsets, eq(adsets.id, ads.adsetId))
+    .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
+    .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
     .where(
       and(
         eq(adInsightsDaily.adId, adId),

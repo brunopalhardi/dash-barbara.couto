@@ -8,6 +8,7 @@ import {
 } from "@/lib/schema/whatsapp";
 import type { ProductSlug } from "@/lib/products";
 import type { DateRange } from "./dashboard";
+import { sumToEur } from "./fx";
 
 const TZ = "America/Sao_Paulo";
 
@@ -114,7 +115,7 @@ export async function getApprovedPurchaseRevenue(
 ): Promise<number> {
   const [row] = await db
     .select({
-      cents: sql<number>`coalesce(sum(${purchases.valueCents}), 0)::int`,
+      cents: sumToEur(purchases.valueCents, purchases.currency),
     })
     .from(purchases)
     .where(
@@ -141,7 +142,7 @@ export async function getRevenueSplit(
   const rows = await db
     .select({
       bucket: purchases.trafficSource,
-      cents: sql<number>`coalesce(sum(${purchases.valueCents}), 0)::int`,
+      cents: sumToEur(purchases.valueCents, purchases.currency),
     })
     .from(purchases)
     .where(
@@ -171,7 +172,7 @@ export async function getRevenueByCampaignName(
   const rows = await db
     .select({
       campaign: sql<string>`upper(${purchases.utmCampaign})`,
-      cents: sql<number>`coalesce(sum(${purchases.valueCents}), 0)::int`,
+      cents: sumToEur(purchases.valueCents, purchases.currency),
     })
     .from(purchases)
     .where(
@@ -241,7 +242,7 @@ export async function getDailyPurchaseSeries(
     .select({
       date: sql<string>`to_char(${purchases.purchasedAt} at time zone 'America/Sao_Paulo', 'YYYY-MM-DD')`,
       count: sql<number>`count(*)::int`,
-      revenueCents: sql<number>`coalesce(sum(${purchases.valueCents}), 0)::int`,
+      revenueCents: sumToEur(purchases.valueCents, purchases.currency),
     })
     .from(purchases)
     .where(

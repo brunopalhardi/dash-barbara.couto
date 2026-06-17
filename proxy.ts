@@ -1,7 +1,9 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+// Next 16 renomeou a convenção `middleware` → `proxy` (mesma funcionalidade).
+// Ver node_modules/next/dist/docs/01-app/01-getting-started/16-proxy.md
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -31,7 +33,7 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isAuthPath = path.startsWith("/login") || path.startsWith("/auth");
-  // /api/* faz auth próprio (cron secret OR user session); middleware não redireciona
+  // /api/* faz auth próprio (cron secret OR user session); proxy não redireciona
   const isApi = path.startsWith("/api/");
   const isPublicAsset =
     path.startsWith("/_next") || path.startsWith("/favicon") || isApi;

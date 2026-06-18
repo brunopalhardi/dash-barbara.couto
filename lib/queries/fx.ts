@@ -14,9 +14,11 @@ export function sumToEur(amount: SQL | SQL.Aliased | unknown, currency: unknown)
   const amt = sql`${amount}`;
   const cur = sql`${currency}`;
   const whens = Object.entries(FX_TO_EUR).map(
-    ([code, rate]) => sql`when ${cur} = ${code} then (${amt}) * ${rate}`,
+    // ::numeric — value_cents é integer; sem o cast, `integer * 1.17` faz o
+    // Postgres tentar converter a taxa pra integer e quebra (22P02).
+    ([code, rate]) => sql`when ${cur} = ${code} then (${amt})::numeric * ${rate}`,
   );
-  return sql<number>`coalesce(sum(case ${sql.join(whens, sql` `)} else (${amt}) end)::float, 0)`;
+  return sql<number>`coalesce(sum(case ${sql.join(whens, sql` `)} else (${amt})::numeric end)::float, 0)`;
 }
 
 /** Converte um valor por-linha (sem sum) pra EUR pela taxa da moeda da linha. */
@@ -24,7 +26,9 @@ export function toEur(amount: SQL | unknown, currency: unknown): SQL<number> {
   const amt = sql`${amount}`;
   const cur = sql`${currency}`;
   const whens = Object.entries(FX_TO_EUR).map(
-    ([code, rate]) => sql`when ${cur} = ${code} then (${amt}) * ${rate}`,
+    // ::numeric — value_cents é integer; sem o cast, `integer * 1.17` faz o
+    // Postgres tentar converter a taxa pra integer e quebra (22P02).
+    ([code, rate]) => sql`when ${cur} = ${code} then (${amt})::numeric * ${rate}`,
   );
-  return sql<number>`coalesce(case ${sql.join(whens, sql` `)} else (${amt}) end::float, 0)`;
+  return sql<number>`coalesce(case ${sql.join(whens, sql` `)} else (${amt})::numeric end::float, 0)`;
 }

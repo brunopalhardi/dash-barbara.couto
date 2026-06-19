@@ -22,11 +22,11 @@ Três peças, espelhando o padrão das outras seções da página.
 
 ### 1. Query — `getCampaignBreakdown(productSlug, range)` (`lib/queries/dashboard.ts`)
 
-`SELECT` agrupado por campanha (join `ad_insights_daily → ads → adsets → campaigns → ad_accounts`), filtrado por `campaigns.productSlug = productSlug` e pelo range:
+`SELECT` agrupado por campanha (join `ad_insights_daily → ads → adsets → campaigns → ad_accounts`), filtrado por `productScopeWhere(getProduct(slug))` (mesmo escopo do `getKpis` → reconcilia e não diverge se a regra mudar) e pelo range:
 
 - `campaignId`, `name`
 - `spend`: `sumToEur(adInsightsDaily.spend, adAccounts.currency)` — **sem** filtro `onlyActive` (inclui stubs/pausados → gasto completo)
-- `activeCreatives`: `count(distinct ad)` onde `ads.status = 'ACTIVE'` E `ads.creativeId IS NOT NULL`
+- `creativesWithSpend`: `count(distinct ad)` onde `ads.creativeId IS NOT NULL` (criativos que **veicularam no período**; independe do status atual do anúncio, pra um ciclo passado não acusar falso "sem criativo" só porque os anúncios foram pausados depois)
 
 Retorna linhas cruas (sem % / total — isso é responsabilidade da função pura abaixo). Ordenação final por gasto desc fica no consumidor.
 
@@ -35,7 +35,7 @@ Retorna linhas cruas (sem % / total — isso é responsabilidade da função pur
 Recebe as linhas cruas e devolve:
 
 - `total`: soma dos `spend` (deve igualar o KPI Investido)
-- `rows`: cada linha + `pctOfTotal` (= `spend / total`, 0 se total 0) + `needsAttention` (= `spend > 0 && activeCreatives === 0`), ordenadas por `spend` desc
+- `rows`: cada linha + `pctOfTotal` (= `spend / total`, 0 se total 0) + `needsAttention` (= `spend >= 0.01 && creativesWithSpend === 0`; piso de 1 cêntimo pra gasto que arredonda a €0,00 não pedir auditoria), ordenadas por `spend` desc
 
 Pura → testável sem DB.
 
@@ -43,10 +43,10 @@ Pura → testável sem DB.
 
 Card "**Campanhas · gasto do período**", renderizado na `/desafio` abaixo do card de Top Criativos. Tabela:
 
-| Campanha | Gasto | % | Criativos ativos | Status |
+| Campanha | Gasto | % | Criativos no período | Status |
 |---|---|---|---|---|
 
-- Linha com `needsAttention`: badge âmbar **⚠ sem criativo ativo** + leve realce de fundo.
+- Linha com `needsAttention`: badge âmbar **⚠ sem criativo** + leve realce de fundo.
 - Linha normal: status "ok" discreto (ou nº de criativos).
 - **Rodapé** com Total (= Investido) — reconciliação explícita.
 - Formatação de moeda via `fmt.money` (EUR/pt-PT, já configurado).
@@ -62,8 +62,9 @@ Card "**Campanhas · gasto do período**", renderizado na `/desafio` abaixo do c
 
 `buildCampaignRows` (pura), em `lib/queries/dashboard.test.ts` (ou arquivo dedicado):
 
-1. Campanha com ≥1 criativo ativo → `needsAttention = false`.
-2. Campanha com gasto e `activeCreatives = 0` (só stubs) → `needsAttention = true`.
+1. Campanha com ≥1 criativo veiculado → `needsAttention = false`.
+2. Campanha com gasto e `creativesWithSpend = 0` (só stubs) → `needsAttention = true`.
+   - + piso: gasto sub-cêntimo (€0,003) não marca; ≥ €0,01 marca.
 3. `total` = soma dos spends; `pctOfTotal` por linha soma ~100%.
 4. Lista vazia → `total = 0`, `rows = []` (sem divisão por zero).
 5. Ordenação: maior gasto primeiro.

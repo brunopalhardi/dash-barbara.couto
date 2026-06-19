@@ -38,7 +38,7 @@ export function CampaignTable({ data }: { data: CampaignBreakdown }) {
               <th className="text-left font-medium py-2 pr-4">Campanha</th>
               <th className="text-right font-medium py-2 px-4">Gasto</th>
               <th className="text-right font-medium py-2 px-4">%</th>
-              <th className="text-right font-medium py-2 px-4">Criativos ativos</th>
+              <th className="text-right font-medium py-2 px-4">Criativos no período</th>
               <th className="text-right font-medium py-2 pl-4">Status</th>
             </tr>
           </thead>
@@ -64,7 +64,7 @@ export function CampaignTable({ data }: { data: CampaignBreakdown }) {
                     r.needsAttention ? "text-amber-400" : ""
                   }`}
                 >
-                  {fmt.int(r.activeCreatives)}
+                  {fmt.int(r.creativesWithSpend)}
                 </td>
                 <td className="py-2.5 pl-4 text-right">
                   {r.needsAttention ? (

@@ -272,19 +272,28 @@ export async function getProductBreakdown(range: DateRange): Promise<ProductBrea
 
 /* ─── Tabela de campanhas com auditoria de criativo ─── */
 
+/** Piso de gasto pra flag de atenção: abaixo disso o gasto arredonda a €0,00 na
+ *  UI, então marcar ⚠ seria contraditório (linha mostra €0,00 e pede auditoria). */
+const SPEND_ATTENTION_FLOOR = 0.01;
+
 export interface CampaignBreakdownRaw {
   campaignId: number;
   name: string;
   /** Gasto completo em EUR (inclui anúncios pausados/stub — sem filtro de status) */
   spend: number;
-  /** nº de anúncios ACTIVE com criativo (creativeId não-nulo) */
-  activeCreatives: number;
+  /**
+   * nº de criativos DISTINTOS que tiveram veiculação no período (anúncios com
+   * creativeId não-nulo e gasto na janela). Base no PERÍODO, não no status
+   * atual — assim um ciclo passado não acusa "sem criativo" só porque os
+   * anúncios já foram pausados depois. Anúncios-stub (criativo nulo) não contam.
+   */
+  creativesWithSpend: number;
 }
 
 export interface CampaignRow extends CampaignBreakdownRaw {
   /** fração do gasto total do produto (0..1) */
   pctOfTotal: number;
-  /** gasto > 0 sem nenhum criativo ativo → dinheiro saindo sem criativo rastreável */
+  /** gastou no período mas nenhum criativo rastreável veiculou → auditoria */
   needsAttention: boolean;
 }
 
@@ -296,7 +305,8 @@ export interface CampaignBreakdown {
 
 /**
  * Pura: deriva % e flag de atenção das linhas cruas e ordena por gasto desc.
- * needsAttention = gastou mas não tem criativo ativo (auditoria do gestor).
+ * needsAttention = gastou (acima do piso) mas nenhum criativo veiculou no
+ * período — dinheiro saindo sem criativo rastreável (auditoria do gestor).
  */
 export function buildCampaignRows(raw: CampaignBreakdownRaw[]): CampaignBreakdown {
   const total = raw.reduce((s, r) => s + r.spend, 0);
@@ -304,28 +314,31 @@ export function buildCampaignRows(raw: CampaignBreakdownRaw[]): CampaignBreakdow
     .map((r) => ({
       ...r,
       pctOfTotal: total > 0 ? r.spend / total : 0,
-      needsAttention: r.spend > 0 && r.activeCreatives === 0,
+      needsAttention: r.spend >= SPEND_ATTENTION_FLOOR && r.creativesWithSpend === 0,
     }))
     .sort((a, b) => b.spend - a.spend);
   return { total, rows };
 }
 
 /**
- * Gasto por campanha do produto (mesmo filtro do KPI Investido → reconcilia).
- * Sem onlyActive: inclui gasto de anúncios pausados/stub. activeCreatives conta
- * só anúncios ACTIVE com criativo, pra o consumidor flagar campanhas que gastam
- * sem nada rastreável rodando.
+ * Gasto por campanha do produto. Usa o MESMO filtro do KPI Investido
+ * (productScopeWhere + range, mesma cadeia de joins) → o total reconcilia 1:1 e
+ * não diverge se a regra de escopo mudar. Sem onlyActive: inclui gasto de
+ * anúncios pausados/stub. creativesWithSpend conta criativos que veicularam no
+ * período (independe de status atual), pra flagar campanhas que gastam sem nada
+ * rastreável.
  */
 export async function getCampaignBreakdown(
   productSlug: ProductSlug,
   range: DateRange,
 ): Promise<CampaignBreakdown> {
+  const product = getProduct(productSlug);
   const rows = await db
     .select({
       campaignId: campaigns.id,
       name: campaigns.name,
       spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
-      activeCreatives: sql<number>`count(distinct ${ads.id}) filter (where ${ads.status} = 'ACTIVE' and ${ads.creativeId} is not null)`,
+      creativesWithSpend: sql<number>`count(distinct ${ads.id}) filter (where ${ads.creativeId} is not null)`,
     })
     .from(adInsightsDaily)
     .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
@@ -334,9 +347,9 @@ export async function getCampaignBreakdown(
     .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
     .where(
       and(
-        eq(campaigns.productSlug, productSlug),
         gte(adInsightsDaily.date, range.from),
         lte(adInsightsDaily.date, range.to),
+        ...productScopeWhere(product),
       ),
     )
     .groupBy(campaigns.id, campaigns.name);
@@ -346,7 +359,7 @@ export async function getCampaignBreakdown(
       campaignId: Number(r.campaignId),
       name: r.name,
       spend: Number(r.spend),
-      activeCreatives: Number(r.activeCreatives),
+      creativesWithSpend: Number(r.creativesWithSpend),
     })),
   );
 }

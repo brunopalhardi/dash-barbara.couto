@@ -3,22 +3,33 @@ import { buildCampaignRows, type CampaignBreakdownRaw } from "./dashboard";
 
 describe("buildCampaignRows", () => {
   function raw(over: Partial<CampaignBreakdownRaw>): CampaignBreakdownRaw {
-    return { campaignId: 1, name: "B-IMERSÃO-VENDAS-Q-V1 CBO", spend: 100, activeCreatives: 2, ...over };
+    return { campaignId: 1, name: "B-IMERSÃO-VENDAS-Q-V1 CBO", spend: 100, creativesWithSpend: 2, ...over };
   }
 
-  it("campanha com criativo ativo NÃO é atenção", () => {
-    const { rows } = buildCampaignRows([raw({ activeCreatives: 3, spend: 50 })]);
+  it("campanha com criativo veiculado NÃO é atenção", () => {
+    const { rows } = buildCampaignRows([raw({ creativesWithSpend: 3, spend: 50 })]);
     expect(rows[0].needsAttention).toBe(false);
   });
 
-  it("campanha com gasto e 0 criativos ativos É atenção (só stubs/pausados)", () => {
-    const { rows } = buildCampaignRows([raw({ activeCreatives: 0, spend: 80 })]);
+  it("campanha com gasto e 0 criativos no período É atenção (só stubs/sem criativo)", () => {
+    const { rows } = buildCampaignRows([raw({ creativesWithSpend: 0, spend: 80 })]);
     expect(rows[0].needsAttention).toBe(true);
   });
 
   it("campanha sem gasto e sem criativo NÃO é atenção (não há o que auditar)", () => {
-    const { rows } = buildCampaignRows([raw({ activeCreatives: 0, spend: 0 })]);
+    const { rows } = buildCampaignRows([raw({ creativesWithSpend: 0, spend: 0 })]);
     expect(rows[0].needsAttention).toBe(false);
+  });
+
+  it("gasto sub-cêntimo (arredonda a €0,00) NÃO marca atenção", () => {
+    // Sem piso, €0,003 mostraria €0,00 e pediria auditoria — contraditório.
+    const { rows } = buildCampaignRows([raw({ creativesWithSpend: 0, spend: 0.003 })]);
+    expect(rows[0].needsAttention).toBe(false);
+  });
+
+  it("gasto >= 1 cêntimo sem criativo marca atenção", () => {
+    const { rows } = buildCampaignRows([raw({ creativesWithSpend: 0, spend: 0.01 })]);
+    expect(rows[0].needsAttention).toBe(true);
   });
 
   it("total = soma dos gastos e pctOfTotal por linha soma ~1", () => {
@@ -47,7 +58,7 @@ describe("buildCampaignRows", () => {
   });
 
   it("total 0 → pctOfTotal 0 em todas as linhas", () => {
-    const { rows } = buildCampaignRows([raw({ spend: 0, activeCreatives: 1 })]);
+    const { rows } = buildCampaignRows([raw({ spend: 0, creativesWithSpend: 1 })]);
     expect(rows[0].pctOfTotal).toBe(0);
   });
 });

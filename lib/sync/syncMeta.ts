@@ -281,6 +281,10 @@ export async function syncMeta(
       metaAccountId: account.metaAccountId,
       rowsByTable: { campaigns: 0, adsets: 0, ads: 0, creatives: 0, ad_insights_daily: 0 },
     };
+    // Gasto de insight que não conseguiu ser atribuído a nenhum anúncio (nem via
+    // stub) — NUNCA pode sumir calado: é exatamente o bug que o stub combate.
+    let droppedInsights = 0;
+    let droppedSpend = 0;
     const actId = account.metaAccountId.startsWith("act_")
       ? account.metaAccountId
       : `act_${account.metaAccountId}`;
@@ -550,7 +554,14 @@ export async function syncMeta(
 
       await inBatches(apiInsights, UPSERT_BATCH, async (ins) => {
         const adDbId = adIdMap.get(ins.ad_id);
-        if (!adDbId) return;
+        if (!adDbId) {
+          // Stub não resolveu (ex: insight sem adset_id/campaign_id, ou Meta
+          // devolveu ad_id de hierarquia deletada). Contabiliza pra não sumir
+          // calado — se isso crescer, o dash volta a divergir do Gerenciador.
+          droppedInsights++;
+          droppedSpend += Number(ins.spend ?? 0);
+          return;
+        }
         const conversions = extractConversions(ins);
         // Meta define "video view" = ≥3 segundos. Então videoViews E videoP3s
         // vêm do MESMO campo: action_type "video_view" em video_play_actions.
@@ -605,6 +616,20 @@ export async function syncMeta(
           });
         r.rowsByTable.ad_insights_daily++;
       });
+
+      if (droppedInsights > 0) {
+        r.rowsByTable.dropped_insights = droppedInsights;
+        console.warn(
+          JSON.stringify({
+            msg: "insights_spend_dropped",
+            accountId: account.id,
+            metaAccountId: account.metaAccountId,
+            droppedRows: droppedInsights,
+            droppedSpend: Number(droppedSpend.toFixed(2)),
+            hint: "insight sem hierarquia atribuível — dash pode divergir do Gerenciador",
+          }),
+        );
+      }
 
       await db
         .update(adAccounts)

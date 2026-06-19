@@ -1,10 +1,84 @@
 import { describe, it, expect } from "vitest";
-import { syncMeta, extractConversions, computeSyncStatus } from "./syncMeta";
+import { syncMeta, extractConversions, computeSyncStatus, planStubEntities } from "./syncMeta";
 import type { MetaInsight } from "../meta/types";
 
 describe("syncMeta", () => {
   it("exports a function", () => {
     expect(typeof syncMeta).toBe("function");
+  });
+});
+
+describe("planStubEntities", () => {
+  // Insight de anúncio PAUSADO/DELETADO que gastou no período. O Meta filtra
+  // esses fora dos endpoints de entidades (effective_status=ACTIVE), então o
+  // gasto deles era descartado e o dash ficava ~22% abaixo do Gerenciador.
+  // planStubEntities descobre o que falta pra recriar como stub e somar o gasto.
+  function insight(over: Partial<MetaInsight>): MetaInsight {
+    return {
+      ad_id: "ad_1",
+      campaign_id: "camp_1",
+      campaign_name: "B-IMERSÃO-VENDAS-Q-V1 CBO",
+      adset_id: "adset_1",
+      adset_name: "conjunto 1",
+      ad_name: "anúncio pausado 1",
+      date_start: "2026-06-17",
+      date_stop: "2026-06-17",
+      spend: "10.00",
+      ...over,
+    };
+  }
+
+  const nada = { campaignIds: new Set<string>(), adsetIds: new Set<string>(), adIds: new Set<string>() };
+
+  it("planeja stub de campanha/adset/anúncio quando nada é conhecido", () => {
+    const plan = planStubEntities([insight({})], nada);
+    expect(plan.campaigns).toEqual([{ metaId: "camp_1", name: "B-IMERSÃO-VENDAS-Q-V1 CBO" }]);
+    expect(plan.adsets).toEqual([{ metaId: "adset_1", name: "conjunto 1", campaignMetaId: "camp_1" }]);
+    expect(plan.ads).toEqual([{ metaId: "ad_1", name: "anúncio pausado 1", adsetMetaId: "adset_1" }]);
+  });
+
+  it("NÃO planeja nada quando o anúncio já é conhecido", () => {
+    const known = {
+      campaignIds: new Set(["camp_1"]),
+      adsetIds: new Set(["adset_1"]),
+      adIds: new Set(["ad_1"]),
+    };
+    const plan = planStubEntities([insight({})], known);
+    expect(plan.campaigns).toEqual([]);
+    expect(plan.adsets).toEqual([]);
+    expect(plan.ads).toEqual([]);
+  });
+
+  it("campanha/adset conhecidos mas anúncio novo → só stub do anúncio", () => {
+    const known = {
+      campaignIds: new Set(["camp_1"]),
+      adsetIds: new Set(["adset_1"]),
+      adIds: new Set<string>(),
+    };
+    const plan = planStubEntities([insight({ ad_id: "ad_novo" })], known);
+    expect(plan.campaigns).toEqual([]);
+    expect(plan.adsets).toEqual([]);
+    expect(plan.ads).toEqual([{ metaId: "ad_novo", name: "anúncio pausado 1", adsetMetaId: "adset_1" }]);
+  });
+
+  it("deduplica: várias linhas (dias) do mesmo anúncio viram 1 stub", () => {
+    const plan = planStubEntities(
+      [insight({ date_start: "2026-06-17" }), insight({ date_start: "2026-06-18" })],
+      nada,
+    );
+    expect(plan.campaigns).toHaveLength(1);
+    expect(plan.adsets).toHaveLength(1);
+    expect(plan.ads).toHaveLength(1);
+  });
+
+  it("ignora insight sem adset_id/campaign_id (não dá pra atribuir)", () => {
+    const plan = planStubEntities(
+      [insight({ ad_id: "ad_x", adset_id: undefined, campaign_id: undefined })],
+      nada,
+    );
+    expect(plan.ads).toEqual([]);
+    expect(plan.adsets).toEqual([]);
+    expect(plan.campaigns).toEqual([]);
   });
 });
 

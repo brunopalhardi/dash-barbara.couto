@@ -120,6 +120,14 @@ export interface MetaInsightAction {
 
 export interface MetaInsight {
   ad_id: string;
+  // Identidade da hierarquia — usados pra recriar entidades de anúncios
+  // pausados/deletados como stub (o Meta os omite dos endpoints de entidade,
+  // mas o gasto deles continua vindo no endpoint de insights sem o filtro).
+  campaign_id?: string;
+  campaign_name?: string;
+  adset_id?: string;
+  adset_name?: string;
+  ad_name?: string;
   date_start: string; // YYYY-MM-DD
   date_stop: string;
   spend?: string;

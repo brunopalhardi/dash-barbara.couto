@@ -270,6 +270,87 @@ export async function getProductBreakdown(range: DateRange): Promise<ProductBrea
   return out.sort((a, b) => b.spend - a.spend);
 }
 
+/* ─── Tabela de campanhas com auditoria de criativo ─── */
+
+export interface CampaignBreakdownRaw {
+  campaignId: number;
+  name: string;
+  /** Gasto completo em EUR (inclui anúncios pausados/stub — sem filtro de status) */
+  spend: number;
+  /** nº de anúncios ACTIVE com criativo (creativeId não-nulo) */
+  activeCreatives: number;
+}
+
+export interface CampaignRow extends CampaignBreakdownRaw {
+  /** fração do gasto total do produto (0..1) */
+  pctOfTotal: number;
+  /** gasto > 0 sem nenhum criativo ativo → dinheiro saindo sem criativo rastreável */
+  needsAttention: boolean;
+}
+
+export interface CampaignBreakdown {
+  /** soma dos gastos — deve igualar o KPI Investido do produto (reconciliação) */
+  total: number;
+  rows: CampaignRow[];
+}
+
+/**
+ * Pura: deriva % e flag de atenção das linhas cruas e ordena por gasto desc.
+ * needsAttention = gastou mas não tem criativo ativo (auditoria do gestor).
+ */
+export function buildCampaignRows(raw: CampaignBreakdownRaw[]): CampaignBreakdown {
+  const total = raw.reduce((s, r) => s + r.spend, 0);
+  const rows = raw
+    .map((r) => ({
+      ...r,
+      pctOfTotal: total > 0 ? r.spend / total : 0,
+      needsAttention: r.spend > 0 && r.activeCreatives === 0,
+    }))
+    .sort((a, b) => b.spend - a.spend);
+  return { total, rows };
+}
+
+/**
+ * Gasto por campanha do produto (mesmo filtro do KPI Investido → reconcilia).
+ * Sem onlyActive: inclui gasto de anúncios pausados/stub. activeCreatives conta
+ * só anúncios ACTIVE com criativo, pra o consumidor flagar campanhas que gastam
+ * sem nada rastreável rodando.
+ */
+export async function getCampaignBreakdown(
+  productSlug: ProductSlug,
+  range: DateRange,
+): Promise<CampaignBreakdown> {
+  const rows = await db
+    .select({
+      campaignId: campaigns.id,
+      name: campaigns.name,
+      spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
+      activeCreatives: sql<number>`count(distinct ${ads.id}) filter (where ${ads.status} = 'ACTIVE' and ${ads.creativeId} is not null)`,
+    })
+    .from(adInsightsDaily)
+    .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
+    .innerJoin(adsets, eq(adsets.id, ads.adsetId))
+    .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
+    .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
+    .where(
+      and(
+        eq(campaigns.productSlug, productSlug),
+        gte(adInsightsDaily.date, range.from),
+        lte(adInsightsDaily.date, range.to),
+      ),
+    )
+    .groupBy(campaigns.id, campaigns.name);
+
+  return buildCampaignRows(
+    rows.map((r) => ({
+      campaignId: Number(r.campaignId),
+      name: r.name,
+      spend: Number(r.spend),
+      activeCreatives: Number(r.activeCreatives),
+    })),
+  );
+}
+
 /**
  * Para o dash Desafio: retorna pontos diários nos últimos N ciclos + o atual.
  * O ciclo é uma janela deslizante de `cycleDays` dias terminando em "today".

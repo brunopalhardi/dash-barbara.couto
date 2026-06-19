@@ -60,9 +60,9 @@ export const CLIENT_PRODUCTS: Product[] = [
     tagText: "text-pink-300",
     navBadge: { text: "ATIVO", tone: "good" },
     showInNav: true,
-    // O Desafio da Barbara roda grupo de WhatsApp (SendFlow)? Hoje: não.
-    // Vira true quando ligarmos o SendFlow deles.
-    hasWhatsAppGroup: false,
+    // SendFlow ligado 2026-06-19: release "LCP - CAPTAÇÃO"
+    // (avfd7ZtxV9z0LLTIWWQs) via SENDFLOW_RELEASE_IDS.
+    hasWhatsAppGroup: true,
   },
 ];
 

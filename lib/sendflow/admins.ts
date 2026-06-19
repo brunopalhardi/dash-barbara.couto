@@ -32,3 +32,24 @@ export function isAdminPhone(phoneE164: string | null | undefined): boolean {
   if (!phoneE164) return false;
   return ADMIN_PHONES_E164.has(phoneE164);
 }
+
+/**
+ * Admins de uma release derivados da PRÓPRIA API do SendFlow (campo `admins`
+ * de cada grupo) — normalizados. Self-maintaining e correto por cliente: a
+ * lista hardcoded acima é do OBA (Brasil); a Barbara tem admins de Portugal.
+ * Une-se a ela no filtro de leadscoring (ver lib/sendflow/sync.ts).
+ */
+export function collectAdminPhones(
+  groups: ReadonlyArray<{
+    admins?: ReadonlyArray<{ number?: string | null; name?: string | null }> | null;
+  }>,
+): Set<string> {
+  const out = new Set<string>();
+  for (const g of groups) {
+    for (const a of g.admins ?? []) {
+      const p = normalizePhone(a.number);
+      if (p) out.add(p);
+    }
+  }
+  return out;
+}

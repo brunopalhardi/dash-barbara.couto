@@ -77,6 +77,59 @@ async function inBatches<T>(
   }
 }
 
+/**
+ * A partir dos insights (que vêm SEM filtro de status), descobre quais
+ * campanha/adset/anúncio NÃO existem na base e precisam ser recriados como
+ * stub pra o gasto poder ser gravado e atribuído ao produto certo.
+ *
+ * Por quê: o Meta omite anúncios pausados/deletados dos endpoints de entidade
+ * (effective_status=ACTIVE), mas o gasto deles continua válido e vem no
+ * endpoint de insights. Sem recriar a entidade, o `if (!adDbId) return` no
+ * upsert de insights jogava esse gasto fora (dash ~22-50% abaixo do Gerenciador).
+ *
+ * Pura (sem DB/IO) → testável. Deduplica por meta_id e ignora insights sem
+ * adset_id/campaign_id (não há como atribuir à hierarquia).
+ */
+export interface StubPlan {
+  campaigns: { metaId: string; name: string }[];
+  adsets: { metaId: string; name: string; campaignMetaId: string }[];
+  ads: { metaId: string; name: string; adsetMetaId: string }[];
+}
+
+export function planStubEntities(
+  insights: MetaInsight[],
+  known: { campaignIds: Set<string>; adsetIds: Set<string>; adIds: Set<string> },
+): StubPlan {
+  const campaigns = new Map<string, { metaId: string; name: string }>();
+  const adsets = new Map<string, { metaId: string; name: string; campaignMetaId: string }>();
+  const ads = new Map<string, { metaId: string; name: string; adsetMetaId: string }>();
+
+  for (const ins of insights) {
+    // Sem hierarquia não dá pra atribuir o gasto a um produto — ignora.
+    if (!ins.adset_id || !ins.campaign_id) continue;
+
+    if (!known.campaignIds.has(ins.campaign_id) && !campaigns.has(ins.campaign_id)) {
+      campaigns.set(ins.campaign_id, { metaId: ins.campaign_id, name: ins.campaign_name ?? ins.campaign_id });
+    }
+    if (!known.adsetIds.has(ins.adset_id) && !adsets.has(ins.adset_id)) {
+      adsets.set(ins.adset_id, {
+        metaId: ins.adset_id,
+        name: ins.adset_name ?? ins.adset_id,
+        campaignMetaId: ins.campaign_id,
+      });
+    }
+    if (!known.adIds.has(ins.ad_id) && !ads.has(ins.ad_id)) {
+      ads.set(ins.ad_id, { metaId: ins.ad_id, name: ins.ad_name ?? ins.ad_id, adsetMetaId: ins.adset_id });
+    }
+  }
+
+  return {
+    campaigns: Array.from(campaigns.values()),
+    adsets: Array.from(adsets.values()),
+    ads: Array.from(ads.values()),
+  };
+}
+
 function mapCreativeType(meta: MetaCreative): "image" | "video" | "carousel" | "other" {
   const t = meta.object_type?.toUpperCase();
   if (t === "VIDEO") return "video";
@@ -228,6 +281,10 @@ export async function syncMeta(
       metaAccountId: account.metaAccountId,
       rowsByTable: { campaigns: 0, adsets: 0, ads: 0, creatives: 0, ad_insights_daily: 0 },
     };
+    // Gasto de insight que não conseguiu ser atribuído a nenhum anúncio (nem via
+    // stub) — NUNCA pode sumir calado: é exatamente o bug que o stub combate.
+    let droppedInsights = 0;
+    let droppedSpend = 0;
     const actId = account.metaAccountId.startsWith("act_")
       ? account.metaAccountId
       : `act_${account.metaAccountId}`;
@@ -425,9 +482,86 @@ export async function syncMeta(
       );
 
       const apiInsights = await opts.client.getInsights(actId, { datePreset: preset });
+
+      // Recria como stub as campanhas/adsets/anúncios PAUSADOS/DELETADOS que
+      // gastaram no período. O Meta os omite dos endpoints de entidade
+      // (effective_status=ACTIVE) mas o gasto deles vem nos insights — sem o
+      // stub, o `if (!adDbId) return` abaixo descartaria esse gasto e o dash
+      // ficaria abaixo do Gerenciador. Status "INACTIVE" = recriado via insight.
+      const stub = planStubEntities(apiInsights, {
+        campaignIds: new Set(campaignIdMap.keys()),
+        adsetIds: new Set(adsetIdMap.keys()),
+        adIds: new Set(adIdMap.keys()),
+      });
+
+      for (const c of stub.campaigns) {
+        await db
+          .insert(campaigns)
+          .values({
+            adAccountId: account.id,
+            metaId: c.metaId,
+            name: c.name,
+            status: "INACTIVE",
+            productSlug: detectProduct(c.name, actId),
+          })
+          .onConflictDoNothing({ target: campaigns.metaId });
+        r.rowsByTable.campaigns++;
+      }
+      if (stub.campaigns.length > 0) {
+        for (const row of await db
+          .select({ id: campaigns.id, metaId: campaigns.metaId })
+          .from(campaigns)
+          .where(eq(campaigns.adAccountId, account.id))) {
+          campaignIdMap.set(row.metaId, row.id);
+        }
+      }
+
+      for (const s of stub.adsets) {
+        const campaignDbId = campaignIdMap.get(s.campaignMetaId);
+        if (!campaignDbId) continue;
+        await db
+          .insert(adsets)
+          .values({ campaignId: campaignDbId, metaId: s.metaId, name: s.name, status: "INACTIVE" })
+          .onConflictDoNothing({ target: adsets.metaId });
+        r.rowsByTable.adsets++;
+      }
+      if (stub.adsets.length > 0) {
+        for (const row of await db
+          .select({ id: adsets.id, metaId: adsets.metaId })
+          .from(adsets)
+          .where(inArray(adsets.campaignId, Array.from(campaignIdMap.values())))) {
+          adsetIdMap.set(row.metaId, row.id);
+        }
+      }
+
+      for (const a of stub.ads) {
+        const adsetDbId = adsetIdMap.get(a.adsetMetaId);
+        if (!adsetDbId) continue;
+        await db
+          .insert(ads)
+          .values({ adsetId: adsetDbId, metaId: a.metaId, name: a.name, status: "INACTIVE" })
+          .onConflictDoNothing({ target: ads.metaId });
+        r.rowsByTable.ads++;
+      }
+      if (stub.ads.length > 0) {
+        for (const row of await db
+          .select({ id: ads.id, metaId: ads.metaId })
+          .from(ads)
+          .where(inArray(ads.adsetId, Array.from(adsetIdMap.values())))) {
+          adIdMap.set(row.metaId, row.id);
+        }
+      }
+
       await inBatches(apiInsights, UPSERT_BATCH, async (ins) => {
         const adDbId = adIdMap.get(ins.ad_id);
-        if (!adDbId) return;
+        if (!adDbId) {
+          // Stub não resolveu (ex: insight sem adset_id/campaign_id, ou Meta
+          // devolveu ad_id de hierarquia deletada). Contabiliza pra não sumir
+          // calado — se isso crescer, o dash volta a divergir do Gerenciador.
+          droppedInsights++;
+          droppedSpend += Number(ins.spend ?? 0);
+          return;
+        }
         const conversions = extractConversions(ins);
         // Meta define "video view" = ≥3 segundos. Então videoViews E videoP3s
         // vêm do MESMO campo: action_type "video_view" em video_play_actions.
@@ -482,6 +616,20 @@ export async function syncMeta(
           });
         r.rowsByTable.ad_insights_daily++;
       });
+
+      if (droppedInsights > 0) {
+        r.rowsByTable.dropped_insights = droppedInsights;
+        console.warn(
+          JSON.stringify({
+            msg: "insights_spend_dropped",
+            accountId: account.id,
+            metaAccountId: account.metaAccountId,
+            droppedRows: droppedInsights,
+            droppedSpend: Number(droppedSpend.toFixed(2)),
+            hint: "insight sem hierarquia atribuível — dash pode divergir do Gerenciador",
+          }),
+        );
+      }
 
       await db
         .update(adAccounts)

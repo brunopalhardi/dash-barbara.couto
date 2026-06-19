@@ -139,12 +139,15 @@ export function createMetaClient(cfg: MetaClientConfig): MetaClient {
 
   // Para campaigns/adsets/ads, o Meta exige o parâmetro nomeado
   // `effective_status=["ACTIVE"]` — `filtering=[{field:effective_status...}]`
-  // é silenciosamente ignorado nesses endpoints e devolve tudo. Já no
-  // endpoint de insights o `filtering` com `ad.effective_status` funciona.
+  // é silenciosamente ignorado nesses endpoints e devolve tudo.
+  //
+  // ⚠️ O endpoint de INSIGHTS NÃO leva filtro de status: o gasto de anúncio
+  // pausado/deletado é real (você pagou) e o Gerenciador conta ele a nível de
+  // campanha. Filtrar por ad.effective_status=ACTIVE descartava ~22-50% do
+  // gasto num lançamento (anúncios são desligados o tempo todo) e o dash ficava
+  // abaixo do Gerenciador. Sem filtro, o nível-anúncio bate 1:1 com a campanha.
+  // O syncMeta recria como stub as entidades de anúncios pausados (planStubEntities).
   const STATUS_PARAM = JSON.stringify(["ACTIVE"]);
-  const INSIGHTS_FILTER = JSON.stringify([
-    { field: "ad.effective_status", operator: "IN", value: ["ACTIVE"] },
-  ]);
 
   return {
     getMe: () => request<MetaUser>("/me", { fields: "id,name" }),
@@ -230,8 +233,7 @@ export function createMetaClient(cfg: MetaClientConfig): MetaClient {
         // Os percentis (p25/p50/p75/p95_watched_actions) SÃO fields top-level
         // separados e continuam válidos (confirmado no SDK oficial do Facebook).
         fields:
-          "ad_id,date_start,date_stop,spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,inline_link_clicks,actions,action_values,video_play_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p95_watched_actions",
-        filtering: INSIGHTS_FILTER,
+          "ad_id,ad_name,adset_id,adset_name,campaign_id,campaign_name,date_start,date_stop,spend,impressions,clicks,ctr,cpc,cpm,reach,frequency,inline_link_clicks,actions,action_values,video_play_actions,video_p25_watched_actions,video_p50_watched_actions,video_p75_watched_actions,video_p95_watched_actions",
         limit: "500",
       }),
   };

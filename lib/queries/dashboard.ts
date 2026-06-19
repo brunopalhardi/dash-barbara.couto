@@ -270,6 +270,100 @@ export async function getProductBreakdown(range: DateRange): Promise<ProductBrea
   return out.sort((a, b) => b.spend - a.spend);
 }
 
+/* ─── Tabela de campanhas com auditoria de criativo ─── */
+
+/** Piso de gasto pra flag de atenção: abaixo disso o gasto arredonda a €0,00 na
+ *  UI, então marcar ⚠ seria contraditório (linha mostra €0,00 e pede auditoria). */
+const SPEND_ATTENTION_FLOOR = 0.01;
+
+export interface CampaignBreakdownRaw {
+  campaignId: number;
+  name: string;
+  /** Gasto completo em EUR (inclui anúncios pausados/stub — sem filtro de status) */
+  spend: number;
+  /**
+   * nº de criativos DISTINTOS que tiveram veiculação no período (anúncios com
+   * creativeId não-nulo e gasto na janela). Base no PERÍODO, não no status
+   * atual — assim um ciclo passado não acusa "sem criativo" só porque os
+   * anúncios já foram pausados depois. Anúncios-stub (criativo nulo) não contam.
+   */
+  creativesWithSpend: number;
+}
+
+export interface CampaignRow extends CampaignBreakdownRaw {
+  /** fração do gasto total do produto (0..1) */
+  pctOfTotal: number;
+  /** gastou no período mas nenhum criativo rastreável veiculou → auditoria */
+  needsAttention: boolean;
+}
+
+export interface CampaignBreakdown {
+  /** soma dos gastos — deve igualar o KPI Investido do produto (reconciliação) */
+  total: number;
+  rows: CampaignRow[];
+}
+
+/**
+ * Pura: deriva % e flag de atenção das linhas cruas e ordena por gasto desc.
+ * needsAttention = gastou (acima do piso) mas nenhum criativo veiculou no
+ * período — dinheiro saindo sem criativo rastreável (auditoria do gestor).
+ */
+export function buildCampaignRows(raw: CampaignBreakdownRaw[]): CampaignBreakdown {
+  const total = raw.reduce((s, r) => s + r.spend, 0);
+  const rows = raw
+    .map((r) => ({
+      ...r,
+      pctOfTotal: total > 0 ? r.spend / total : 0,
+      needsAttention: r.spend >= SPEND_ATTENTION_FLOOR && r.creativesWithSpend === 0,
+    }))
+    .sort((a, b) => b.spend - a.spend);
+  return { total, rows };
+}
+
+/**
+ * Gasto por campanha do produto. Usa o MESMO filtro do KPI Investido
+ * (productScopeWhere + range, mesma cadeia de joins) → o total reconcilia 1:1 e
+ * não diverge se a regra de escopo mudar. Sem onlyActive: inclui gasto de
+ * anúncios pausados/stub. creativesWithSpend conta criativos que veicularam no
+ * período (independe de status atual), pra flagar campanhas que gastam sem nada
+ * rastreável.
+ */
+export async function getCampaignBreakdown(
+  productSlug: ProductSlug,
+  range: DateRange,
+): Promise<CampaignBreakdown> {
+  const product = getProduct(productSlug);
+  const rows = await db
+    .select({
+      campaignId: campaigns.id,
+      name: campaigns.name,
+      spend: sumToEur(adInsightsDaily.spend, adAccounts.currency),
+      creativesWithSpend: sql<number>`count(distinct ${ads.id}) filter (where ${ads.creativeId} is not null)`,
+    })
+    .from(adInsightsDaily)
+    .innerJoin(ads, eq(ads.id, adInsightsDaily.adId))
+    .innerJoin(adsets, eq(adsets.id, ads.adsetId))
+    .innerJoin(campaigns, eq(campaigns.id, adsets.campaignId))
+    .innerJoin(adAccounts, eq(adAccounts.id, campaigns.adAccountId))
+    .where(
+      and(
+        gte(adInsightsDaily.date, range.from),
+        lte(adInsightsDaily.date, range.to),
+        ...productScopeWhere(product),
+      ),
+    )
+    .groupBy(campaigns.id, campaigns.name);
+
+  return buildCampaignRows(
+    rows.map((r) => ({
+      campaignId: Number(r.campaignId),
+      name: r.name,
+      spend: Number(r.spend),
+      creativesWithSpend: Number(r.creativesWithSpend),
+    })),
+  );
+}
+
 /**
  * Para o dash Desafio: retorna pontos diários nos últimos N ciclos + o atual.
  * O ciclo é uma janela deslizante de `cycleDays` dias terminando em "today".

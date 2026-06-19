@@ -1,5 +1,6 @@
 import { TrendingUp, ShoppingCart, DollarSign, Target, Activity, Users } from "lucide-react";
 import {
+  getCampaignBreakdown,
   getDailySeries,
   getKpis,
   getTopAds,
@@ -26,6 +27,7 @@ import { KpiCard } from "@/components/dashboard/kpi-card";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
 import { TopCreativesGrid } from "@/components/dashboard/top-creatives-grid";
+import { CampaignTable } from "@/components/dashboard/campaign-table";
 import type { DateRange, DailyPoint } from "@/lib/queries/dashboard";
 import type { DailyPurchasePoint } from "@/lib/queries/purchases";
 
@@ -81,6 +83,7 @@ export default async function DesafioPage({
     prevKpis, prevPurchaseCount, prevRevenueHot, prevDailyHot, prevDailyMeta,
     buyers,
     split,
+    campaignBreakdown,
   ] = await Promise.all([
     getKpis("desafio", currentRange),
     getTopAds("desafio", currentRange, { limit: 5, orderBy: "cpa", onlyActive: true }),
@@ -97,6 +100,7 @@ export default async function DesafioPage({
     compare ? getDailySeries("desafio", prevRange) : Promise.resolve([]),
     getBuyersForCycle("desafio", currentRange),
     getRevenueSplit("desafio", currentRange),
+    getCampaignBreakdown("desafio", currentRange),
   ]);
 
   const currentDaily = buildDailyPoints(currentRange, dailyHot, dailyMeta);
@@ -196,6 +200,17 @@ export default async function DesafioPage({
         </CardHeader>
         <CardContent>
           <TopCreativesGrid ads={adsTbl} limit={5} basePath="/desafio/criativo" />
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border/60 mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Campanhas · gasto do período
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CampaignTable data={campaignBreakdown} />
         </CardContent>
       </Card>
 

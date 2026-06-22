@@ -10,12 +10,14 @@ import { parseRangeFromSearchParams } from "@/lib/utils/date-ranges";
 import {
   getApprovedPurchaseCount,
   getApprovedPurchaseRevenue,
+  getAscensionToPrincipal,
   getBuyersForCycle,
   getDailyPurchaseSeries,
   getInGroupStats,
   getRevenueSplit,
 } from "@/lib/queries/purchases";
 import { getSendflowGroupSummary } from "@/lib/queries/sendflow";
+import { getPageFunnel } from "@/lib/queries/funnel";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { BuyersTable } from "@/components/dashboard/buyers-table";
 import { ComparisonToggle } from "@/components/dashboard/comparison-toggle";
@@ -23,10 +25,15 @@ import { RefreshTodayButton } from "@/components/dashboard/refresh-today-button"
 import { DailyBarChart, type DailyBarPoint } from "@/components/dashboard/daily-bar-chart";
 import { fmt } from "@/components/dashboard/format";
 import { SendflowGroupPanel } from "@/components/dashboard/sendflow-group-panel";
+import { AscensionPanel } from "@/components/dashboard/ascension-panel";
+import { FunnelStagesTable } from "@/components/dashboard/funnel-stages-table";
+import { CollapsibleCard } from "@/components/dashboard/collapsible-card";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { PageHeader } from "@/components/dashboard/page-header";
 import { PeriodSelector } from "@/components/dashboard/period-selector";
-import { TopCreativesGrid } from "@/components/dashboard/top-creatives-grid";
+import { TopCreativesToggle } from "@/components/dashboard/top-creatives-toggle";
+import { FunnelHighlights, highlightsByCpa } from "@/components/dashboard/funnel-highlights";
+import { FunnelTablePage } from "@/components/dashboard/funnel-table-page";
 import { CampaignTable } from "@/components/dashboard/campaign-table";
 import type { DateRange, DailyPoint } from "@/lib/queries/dashboard";
 import type { DailyPurchasePoint } from "@/lib/queries/purchases";
@@ -84,9 +91,12 @@ export default async function DesafioPage({
     buyers,
     split,
     campaignBreakdown,
+    pageFunnel,
+    ascension,
   ] = await Promise.all([
     getKpis("desafio", currentRange),
-    getTopAds("desafio", currentRange, { limit: 5, orderBy: "cpa", onlyActive: true }),
+    // Pool amplo de ativos pra reordenar no client (vendas/gasto/ROAS/CTR).
+    getTopAds("desafio", currentRange, { limit: 30, orderBy: "spend", onlyActive: true }),
     getSendflowGroupSummary(currentRange),
     getApprovedPurchaseCount("desafio", currentRange),
     getApprovedPurchaseRevenue("desafio", currentRange),
@@ -101,6 +111,8 @@ export default async function DesafioPage({
     getBuyersForCycle("desafio", currentRange),
     getRevenueSplit("desafio", currentRange),
     getCampaignBreakdown("desafio", currentRange),
+    getPageFunnel("desafio", currentRange),
+    getAscensionToPrincipal(currentRange),
   ]);
 
   const currentDaily = buildDailyPoints(currentRange, dailyHot, dailyMeta);
@@ -184,6 +196,37 @@ export default async function DesafioPage({
       <Card className="bg-card border-border/60 mb-6">
         <CardHeader>
           <CardTitle className="text-sm font-medium text-muted-foreground">
+            Funil do Desafio · 3 etapas
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <FunnelStagesTable
+            spend={kpis.spend}
+            ingressoBuyers={purchaseCount}
+            ingressoRevenue={revenueHot}
+            ascended={ascension.ascended}
+            principalRevenue={ascension.principalRevenueEur}
+          />
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border/60 mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground">
+            Ascensão · Desafio → Produto principal
+          </CardTitle>
+          <p className="text-xs text-muted-foreground/70">
+            Compradores do ingresso que compraram o produto principal depois (oferta durante os 7 dias).
+          </p>
+        </CardHeader>
+        <CardContent>
+          <AscensionPanel data={ascension} />
+        </CardContent>
+      </Card>
+
+      <Card className="bg-card border-border/60 mb-6">
+        <CardHeader>
+          <CardTitle className="text-sm font-medium text-muted-foreground">
             Performance diária
           </CardTitle>
         </CardHeader>
@@ -195,46 +238,38 @@ export default async function DesafioPage({
       <Card className="bg-card border-border/60 mb-6">
         <CardHeader>
           <CardTitle className="text-sm font-medium text-muted-foreground">
-            Top criativos · ativos por menor CPA
+            Top criativos · top 5 (selecione a métrica)
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <TopCreativesGrid ads={adsTbl} limit={5} basePath="/desafio/criativo" />
+          <TopCreativesToggle ads={adsTbl} limit={5} basePath="/desafio/criativo" />
         </CardContent>
       </Card>
 
-      <Card className="bg-card border-border/60 mb-6">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Campanhas · gasto do período
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <CampaignTable data={campaignBreakdown} />
-        </CardContent>
-      </Card>
+      <CollapsibleCard title="Campanhas · gasto do período">
+        <CampaignTable data={campaignBreakdown} />
+      </CollapsibleCard>
 
-      <Card className="bg-card border-border/60 mb-6">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Compradores do período · {buyers.length}
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <BuyersTable buyers={buyers} showInGroup />
-        </CardContent>
-      </Card>
+      <CollapsibleCard title="Performance de página · destino dos anúncios" defaultOpen>
+        <FunnelHighlights
+          items={highlightsByCpa(
+            pageFunnel.map((p) => ({
+              label: p.landingUrl ?? "Sem URL",
+              spend: p.spend,
+              purchase: p.purchase,
+            })),
+          )}
+        />
+        <FunnelTablePage rows={pageFunnel} />
+      </CollapsibleCard>
 
-      <Card className="bg-card border-border/60 mb-6">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Grupos WhatsApp — SendFlow
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <SendflowGroupPanel data={sendflowSummary} />
-        </CardContent>
-      </Card>
+      <CollapsibleCard title={`Compradores do período · ${buyers.length}`}>
+        <BuyersTable buyers={buyers} showInGroup />
+      </CollapsibleCard>
+
+      <CollapsibleCard title="Grupos WhatsApp — SendFlow">
+        <SendflowGroupPanel data={sendflowSummary} />
+      </CollapsibleCard>
     </>
   );
 }

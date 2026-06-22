@@ -25,6 +25,8 @@ export interface DailyBarPoint {
 interface DailyBarChartProps {
   current: DailyBarPoint[];
   previous?: DailyBarPoint[] | null;
+  /** Série diária do produto principal (alinhada por índice/data com current) */
+  principal?: DailyBarPoint[] | null;
 }
 
 type Metric = "vendas" | "receita" | "investido" | "roas";
@@ -53,10 +55,16 @@ const COLOR_ABOVE = "#6366f1";
 const COLOR_BELOW = "#52525b";
 const COLOR_PREV = "rgba(99, 102, 241, 0.25)";
 const COLOR_AVG = "rgba(251, 191, 36, 0.5)";
+const COLOR_PRINCIPAL = "#e879f9";
 
-export function DailyBarChart({ current, previous }: DailyBarChartProps) {
+export function DailyBarChart({ current, previous, principal }: DailyBarChartProps) {
   const [metric, setMetric] = useState<Metric>("vendas");
+  const [showPrincipal, setShowPrincipal] = useState(true);
   const metricCfg = METRICS.find((m) => m.key === metric)!;
+
+  const hasPrincipal = !!(
+    principal && principal.some((p) => p.vendas > 0 || p.receita > 0)
+  );
 
   const merged = current.map((p, i) => ({
     date: shortDate(p.date),
@@ -64,6 +72,7 @@ export function DailyBarChart({ current, previous }: DailyBarChartProps) {
     weekday: weekdayPt(p.date),
     value: p[metric],
     prev: previous?.[i]?.[metric] ?? null,
+    principal: principal?.[i]?.[metric] ?? 0,
   }));
 
   const total = current.reduce((s, p) => s + p[metric], 0);
@@ -121,21 +130,38 @@ export function DailyBarChart({ current, previous }: DailyBarChartProps) {
           )}
         </div>
 
-        <div className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card p-[3px]">
-          {METRICS.map((m) => (
+        <div className="flex items-center gap-2 flex-wrap">
+          {hasPrincipal && (
             <button
-              key={m.key}
               type="button"
-              onClick={() => setMetric(m.key)}
-              className={`font-mono text-[11px] tracking-wide font-medium px-2.5 py-1.5 rounded transition-colors lowercase ${
-                metric === m.key
-                  ? "bg-white/[0.06] text-foreground"
-                  : "text-muted-foreground hover:text-foreground"
+              onClick={() => setShowPrincipal((s) => !s)}
+              className={`inline-flex items-center gap-1.5 font-mono text-[11px] tracking-wide font-medium px-2.5 py-1.5 rounded-md border transition-colors lowercase ${
+                showPrincipal
+                  ? "border-fuchsia-500/40 bg-fuchsia-500/10 text-fuchsia-300"
+                  : "border-border/60 bg-card text-muted-foreground hover:text-foreground"
               }`}
+              title="Liga/desliga a série do produto principal"
             >
-              {m.label}
+              <span className="w-2 h-2 rounded-sm" style={{ background: COLOR_PRINCIPAL }} />
+              produto principal
             </button>
-          ))}
+          )}
+          <div className="inline-flex items-center gap-0.5 rounded-md border border-border bg-card p-[3px]">
+            {METRICS.map((m) => (
+              <button
+                key={m.key}
+                type="button"
+                onClick={() => setMetric(m.key)}
+                className={`font-mono text-[11px] tracking-wide font-medium px-2.5 py-1.5 rounded transition-colors lowercase ${
+                  metric === m.key
+                    ? "bg-white/[0.06] text-foreground"
+                    : "text-muted-foreground hover:text-foreground"
+                }`}
+              >
+                {m.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -232,7 +258,11 @@ export function DailyBarChart({ current, previous }: DailyBarChartProps) {
               itemStyle={{ color: "var(--color-foreground)" }}
               formatter={(v, name) => [
                 metricCfg.format(Number(v)),
-                name === "prev" ? "anterior" : "atual",
+                name === "prev"
+                  ? "anterior"
+                  : name === "principal"
+                    ? "produto principal"
+                    : "ingresso",
               ]}
             />
             {hasCompare ? (
@@ -243,6 +273,9 @@ export function DailyBarChart({ current, previous }: DailyBarChartProps) {
                 <Cell key={i} fill={colorForValue(m.value)} />
               ))}
             </Bar>
+            {hasPrincipal && showPrincipal ? (
+              <Bar dataKey="principal" fill={COLOR_PRINCIPAL} radius={[3, 3, 0, 0]} />
+            ) : null}
           </BarChart>
         </ResponsiveContainer>
       </div>
@@ -253,6 +286,9 @@ export function DailyBarChart({ current, previous }: DailyBarChartProps) {
         <Legend color={COLOR_ABOVE} label="acima da média" />
         <Legend color={COLOR_BELOW} label="abaixo da média" />
         {hasCompare ? <Legend color={COLOR_PREV} label="período anterior" /> : null}
+        {hasPrincipal && showPrincipal ? (
+          <Legend color={COLOR_PRINCIPAL} label="produto principal" />
+        ) : null}
         <div className="flex items-center gap-1.5">
           <span
             className="w-3 border-t border-dashed"

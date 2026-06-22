@@ -1,6 +1,12 @@
+"use client";
+
+import { useState } from "react";
 import { AlertTriangle } from "lucide-react";
 import { fmt } from "./format";
+import { ShowMoreButton } from "./show-more-button";
 import type { CampaignBreakdown } from "@/lib/queries/dashboard";
+
+const PAGE_SIZE = 10;
 
 /**
  * Tabela de campanhas do produto com gasto COMPLETO (inclui pausados/stub, então
@@ -10,6 +16,7 @@ import type { CampaignBreakdown } from "@/lib/queries/dashboard";
  */
 export function CampaignTable({ data }: { data: CampaignBreakdown }) {
   const { rows, total } = data;
+  const [visible, setVisible] = useState(PAGE_SIZE);
 
   if (rows.length === 0) {
     return (
@@ -20,6 +27,7 @@ export function CampaignTable({ data }: { data: CampaignBreakdown }) {
   }
 
   const attentionCount = rows.filter((r) => r.needsAttention).length;
+  const shown = rows.slice(0, visible);
 
   return (
     <div className="space-y-3">
@@ -43,7 +51,7 @@ export function CampaignTable({ data }: { data: CampaignBreakdown }) {
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {shown.map((r) => (
               <tr
                 key={r.campaignId}
                 className={`border-b border-border/40 ${r.needsAttention ? "bg-amber-400/[0.04]" : ""}`}
@@ -94,6 +102,13 @@ export function CampaignTable({ data }: { data: CampaignBreakdown }) {
           </tfoot>
         </table>
       </div>
+
+      <ShowMoreButton
+        shown={shown.length}
+        total={rows.length}
+        step={PAGE_SIZE}
+        onMore={() => setVisible((v) => v + PAGE_SIZE)}
+      />
     </div>
   );
 }

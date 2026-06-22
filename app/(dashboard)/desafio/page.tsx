@@ -26,7 +26,6 @@ import { DailyBarChart, type DailyBarPoint } from "@/components/dashboard/daily-
 import { fmt } from "@/components/dashboard/format";
 import { SendflowGroupPanel } from "@/components/dashboard/sendflow-group-panel";
 import { AscensionPanel } from "@/components/dashboard/ascension-panel";
-import { FunnelStagesTable } from "@/components/dashboard/funnel-stages-table";
 import { CollapsibleCard } from "@/components/dashboard/collapsible-card";
 import { KpiCard } from "@/components/dashboard/kpi-card";
 import { PageHeader } from "@/components/dashboard/page-header";
@@ -192,23 +191,6 @@ export default async function DesafioPage({
           accent="fuchsia"
         />
       </section>
-
-      <Card className="bg-card border-border/60 mb-6">
-        <CardHeader>
-          <CardTitle className="text-sm font-medium text-muted-foreground">
-            Funil do Desafio · 3 etapas
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <FunnelStagesTable
-            spend={kpis.spend}
-            ingressoBuyers={purchaseCount}
-            ingressoRevenue={revenueHot}
-            ascended={ascension.ascended}
-            principalRevenue={ascension.principalRevenueEur}
-          />
-        </CardContent>
-      </Card>
 
       <Card className="bg-card border-border/60 mb-6">
         <CardHeader>

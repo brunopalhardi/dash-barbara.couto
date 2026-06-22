@@ -8,7 +8,7 @@
 
 ## Sequência das seções na página (ordem que o Tiago pediu)
 
-1. **Funil 3 linhas + Ascensão** — Total / Ingresso / Produto principal com investido/compradores/receita/CAC/ROAS + taxa de ascensão. ✅ feito 2026-06-21
+1. **Ascensão** — taxa de compradores do ingresso que sobem pro produto principal, atribuída à **semana da compra do ingresso** (coorte por semana; o principal pode ser comprado na semana seguinte e ainda conta nessa semana). ✅ feito 2026-06-21. **Funil de 3 linhas REMOVIDO** (Bruno 2026-06-22: deixar só a ascensão) — `funnel-stages-table.tsx` deletado.
 2. **Performance diária** — ingresso. ✅ feito; série do **produto principal removida da página por ora** (Bruno 2026-06-21: na aba do desafio quer só a ascensão pro principal; decidem o resto depois). Capacidade segue dormente no `DailyBarChart` (prop `principal` + `getDailyPurchaseSeriesForSlugs`) — reativa só re-passando o prop.
 3. **Top criativos** — top 5 por vendas + toggle gasto/venda/ROAS/CTR ("igual o do Gui"). ✅ feito 2026-06-21
 4. **Performance de página** — páginas do tráfego (Meta): impressões/gasto/compras/CPA + funil pós-clique, padrão `/guia`. ✅ feito 2026-06-21, aberta por padrão. **VSL/VTurb NÃO entra** no desafio (Bruno 2026-06-21: desafio não tem VSL).

@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { purchases } from "@/lib/schema/purchases";
 import {
@@ -9,8 +9,14 @@ import {
 import type { ProductSlug } from "@/lib/products";
 import type { DateRange } from "./dashboard";
 import { sumToEur } from "./fx";
+import { FX_TO_EUR } from "@/lib/client-config";
 
 const TZ = "America/Sao_Paulo";
+
+function eurFromCents(cents: number | null | undefined, currency: string | null | undefined): number {
+  const rate = currency ? (FX_TO_EUR[currency] ?? 1) : 1;
+  return (Number(cents ?? 0) * rate) / 100;
+}
 
 /**
  * Filtra purchased_at pelo dia-calendário em fuso BR (America/Sao_Paulo).
@@ -224,6 +230,159 @@ export async function getInGroupStats(
   };
 }
 
+/* ─── Ascensão: Desafio (ingresso) → Produto principal ─── */
+
+export interface AscensionRow {
+  buyerName: string | null;
+  buyerEmail: string | null;
+  buyerPhoneE164: string | null;
+  desafioAt: Date;
+  desafioValueEur: number;
+  principalSlug: "principal_base" | "principal_prof";
+  principalNameRaw: string | null;
+  principalAt: Date;
+  principalValueEur: number;
+}
+
+export interface AscensionStats {
+  /** compradores DISTINTOS do Desafio no período (com email ou telefone) */
+  desafioBuyers: number;
+  /** coorte madura: janela de ascensão já fechou (teve chance completa) */
+  settledBuyers: number;
+  /** coorte cuja janela ainda está aberta — pode ainda ascender (semana fresca) */
+  maturingBuyers: number;
+  /** total que ascendeu (maduros + os que já subiram dentro da janela aberta) */
+  ascended: number;
+  /** ascensões SÓ da coorte madura — numerador da taxa */
+  ascendedSettled: number;
+  ascendedBase: number;
+  ascendedProf: number;
+  /** taxa "justa" = ascendedSettled / settledBuyers (0..1) — não dilui com fresca */
+  rate: number;
+  /** receita EUR da 1ª compra principal de cada ascendido */
+  principalRevenueEur: number;
+  /** janela de atribuição em dias (relativa à compra do ingresso) */
+  windowDays: number;
+  rows: AscensionRow[];
+}
+
+/**
+ * Janela de atribuição da ascensão (dias após a compra do ingresso). 21 = semana
+ * do curso (oferta) + semana de recuperação. Validado no histórico (jun/2026):
+ * mediana 14d, 76% das ascensões caem em ≤21d. Trocar pra 14 = só a oferta do
+ * curso (mais estrito). Ver plano 2026-06-21.
+ */
+const ASCENSION_WINDOW_DAYS = 21;
+
+/**
+ * Taxa de ascensão do funil do Desafio: dos compradores do ingresso (slug
+ * "desafio") no período, quantos compraram um PRODUTO PRINCIPAL (base/prof)
+ * depois — a oferta do principal acontece durante/após os 7 dias do desafio.
+ *
+ * Identidade do comprador = email (preferido) ou telefone E.164. Ascensão =
+ * compra aprovada de principal do mesmo comprador entre a compra do desafio e
+ * ASCENSION_WINDOW_DAYS dias depois. Pega a 1ª compra principal (row_number=1).
+ *
+ * Janela relativa por comprador → funciona no modelo rolante semanal (cada
+ * pessoa medida a partir da própria compra), independente de quando se olha.
+ */
+export async function getAscensionToPrincipal(range: DateRange): Promise<AscensionStats> {
+  // Uma query: cada comprador da coorte do Desafio + sua 1ª compra de principal
+  // dentro da janela (left join, pode ser null) + flag `settled` (janela fechou).
+  const result = (await db.execute(sql`
+    with desafio_cohort as (
+      select
+        coalesce(nullif(lower(trim(${purchases.buyerEmail})), ''), ${purchases.buyerPhoneE164}) as ident,
+        min(${purchases.purchasedAt}) as desafio_at,
+        (array_agg(${purchases.buyerName}      order by ${purchases.purchasedAt}))[1] as name,
+        (array_agg(${purchases.buyerEmail}     order by ${purchases.purchasedAt}))[1] as email,
+        (array_agg(${purchases.buyerPhoneE164} order by ${purchases.purchasedAt}))[1] as phone,
+        (array_agg(${purchases.valueCents}     order by ${purchases.purchasedAt}))[1] as desafio_cents,
+        (array_agg(${purchases.currency}       order by ${purchases.purchasedAt}))[1] as desafio_currency
+      from ${purchases}
+      where ${purchases.productSlug} = 'desafio'
+        and ${purchases.status} = 'approved'
+        and (${purchases.purchasedAt} at time zone ${TZ})::date between ${range.from}::date and ${range.to}::date
+        and coalesce(nullif(lower(trim(${purchases.buyerEmail})), ''), ${purchases.buyerPhoneE164}) is not null
+      group by 1
+    ),
+    asc_first as (
+      select ident, principal_slug, principal_name, principal_cents, principal_currency, principal_at
+      from (
+        select dc.ident,
+               p.product_slug     as principal_slug,
+               p.product_name_raw as principal_name,
+               p.value_cents      as principal_cents,
+               p.currency         as principal_currency,
+               p.purchased_at     as principal_at,
+               row_number() over (partition by dc.ident order by p.purchased_at) as rn
+        from desafio_cohort dc
+        join ${purchases} p
+          on p.status = 'approved'
+         and p.product_slug in ('principal_base', 'principal_prof')
+         and p.purchased_at >= dc.desafio_at
+         and p.purchased_at <= dc.desafio_at + make_interval(days => ${ASCENSION_WINDOW_DAYS})
+         and (
+              (dc.email is not null and lower(trim(p.buyer_email)) = dc.email)
+           or (dc.phone is not null and p.buyer_phone_e164 = dc.phone)
+         )
+      ) z
+      where rn = 1
+    )
+    select
+      dc.name, dc.email, dc.phone, dc.desafio_at, dc.desafio_cents, dc.desafio_currency,
+      (dc.desafio_at + make_interval(days => ${ASCENSION_WINDOW_DAYS}) <= now()) as settled,
+      af.principal_slug, af.principal_name, af.principal_cents, af.principal_currency, af.principal_at
+    from desafio_cohort dc
+    left join asc_first af on af.ident = dc.ident
+    order by af.principal_at desc nulls last
+  `)) as unknown as Array<{
+    name: string | null; email: string | null; phone: string | null;
+    desafio_at: string; desafio_cents: number | null; desafio_currency: string | null;
+    settled: boolean;
+    principal_slug: "principal_base" | "principal_prof" | null;
+    principal_name: string | null; principal_cents: number | null;
+    principal_currency: string | null; principal_at: string | null;
+  }>;
+
+  const desafioBuyers = result.length;
+  const settledBuyers = result.filter((r) => r.settled).length;
+  const maturingBuyers = desafioBuyers - settledBuyers;
+
+  const rows: AscensionRow[] = result
+    .filter((r) => r.principal_slug !== null && r.principal_at !== null)
+    .map((r) => ({
+      buyerName: r.name,
+      buyerEmail: r.email,
+      buyerPhoneE164: r.phone,
+      desafioAt: new Date(r.desafio_at),
+      desafioValueEur: eurFromCents(r.desafio_cents, r.desafio_currency),
+      principalSlug: r.principal_slug as "principal_base" | "principal_prof",
+      principalNameRaw: r.principal_name,
+      principalAt: new Date(r.principal_at as string),
+      principalValueEur: eurFromCents(r.principal_cents, r.principal_currency),
+    }));
+
+  const ascendedSettled = result.filter((r) => r.settled && r.principal_slug !== null).length;
+  const ascendedBase = rows.filter((r) => r.principalSlug === "principal_base").length;
+  const ascendedProf = rows.filter((r) => r.principalSlug === "principal_prof").length;
+  const principalRevenueEur = rows.reduce((s, r) => s + r.principalValueEur, 0);
+
+  return {
+    desafioBuyers,
+    settledBuyers,
+    maturingBuyers,
+    ascended: rows.length,
+    ascendedSettled,
+    ascendedBase,
+    ascendedProf,
+    rate: settledBuyers > 0 ? ascendedSettled / settledBuyers : 0,
+    principalRevenueEur,
+    windowDays: ASCENSION_WINDOW_DAYS,
+    rows,
+  };
+}
+
 export interface DailyPurchasePoint {
   date: string;
   count: number;
@@ -248,6 +407,42 @@ export async function getDailyPurchaseSeries(
     .where(
       and(
         eq(purchases.productSlug, productSlug),
+        eq(purchases.status, "approved"),
+        inRangeBR(range),
+      ),
+    )
+    .groupBy(
+      sql`to_char(${purchases.purchasedAt} at time zone 'America/Sao_Paulo', 'YYYY-MM-DD')`,
+    )
+    .orderBy(
+      sql`to_char(${purchases.purchasedAt} at time zone 'America/Sao_Paulo', 'YYYY-MM-DD')`,
+    );
+  return rows.map((r) => ({
+    date: r.date,
+    count: Number(r.count),
+    revenueCents: Number(r.revenueCents),
+  }));
+}
+
+/**
+ * Série diária de compras aprovadas para um CONJUNTO de slugs (ex.: os dois
+ * produtos principais). Mesma forma do getDailyPurchaseSeries.
+ */
+export async function getDailyPurchaseSeriesForSlugs(
+  slugs: string[],
+  range: DateRange,
+): Promise<DailyPurchasePoint[]> {
+  if (slugs.length === 0) return [];
+  const rows = await db
+    .select({
+      date: sql<string>`to_char(${purchases.purchasedAt} at time zone 'America/Sao_Paulo', 'YYYY-MM-DD')`,
+      count: sql<number>`count(*)::int`,
+      revenueCents: sumToEur(purchases.valueCents, purchases.currency),
+    })
+    .from(purchases)
+    .where(
+      and(
+        inArray(purchases.productSlug, slugs),
         eq(purchases.status, "approved"),
         inRangeBR(range),
       ),

@@ -9,7 +9,7 @@ const TOKEN = "test-hottok-123";
 const payload = {
   event: "PURCHASE_APPROVED",
   data: {
-    product: { id: 7523998, name: "Desafio O Bom do Alzheimer" },
+    product: { id: 7206438, name: "Kit Imersão 7 dias - Cura nas tuas Mãos" },
     buyer: {
       name: "João Teste",
       email: "joao@test.com",

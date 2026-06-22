@@ -1,12 +1,12 @@
 import { normalizePhone } from "@/lib/utils/phone";
-import { classifyPurchaseProduct, type ProductSlug } from "@/lib/products";
+import { classifyPurchaseProduct, type PurchaseSlug } from "@/lib/products";
 import { extractTracking, classifyTraffic } from "./tracking";
 
 export interface ParsedPurchase {
   event: "PURCHASE_APPROVED" | "PURCHASE_REFUNDED" | "PURCHASE_CHARGEBACK";
   status: "approved" | "refunded" | "chargeback";
   transactionId: string;
-  productSlug: ProductSlug | "outros";
+  productSlug: PurchaseSlug | "outros";
   productNameRaw: string | null;
   buyerName: string | null;
   buyerEmail: string | null;

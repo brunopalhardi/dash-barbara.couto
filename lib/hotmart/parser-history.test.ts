@@ -3,7 +3,7 @@ import { parseSalesHistoryItem } from "./parser-history";
 
 function makeItem(status: string, overrides: Record<string, unknown> = {}) {
   return {
-    product: { id: 7523998, name: "Desafio O Bom do Alzheimer" },
+    product: { id: 7206438, name: "Kit Imersão 7 dias - Cura nas tuas Mãos" },
     buyer: {
       name: "Maria Silva",
       email: "maria@example.com",

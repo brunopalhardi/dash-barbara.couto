@@ -96,7 +96,22 @@ export async function getSendflowGroupSummary(
       inviteCode: whatsappGroups.inviteCode,
     })
     .from(whatsappGroups)
-    .where(eq(whatsappGroups.sendflowReleaseExternalId, release.externalId))
+    .where(
+      and(
+        eq(whatsappGroups.sendflowReleaseExternalId, release.externalId),
+        // Só os grupos vistos no ÚLTIMO sync desta release. O SendFlow rotaciona
+        // o external_id dos grupos (cada onda de captação gera ids novos), e como
+        // o upsert é por external_id, os antigos viram linhas órfãs que nunca mais
+        // são tocadas. Sem este filtro a query soma instâncias velhas + atuais e
+        // infla a contagem (ex.: 2 grupos reais viram 4). updatedAt é carimbado =
+        // sync.now em cada upsert; grupos ausentes da resposta atual mantêm o
+        // updatedAt antigo, então caem fora da janela.
+        gte(
+          whatsappGroups.updatedAt,
+          sql`(select max(g2.updated_at) from whatsapp_groups g2 where g2.sendflow_release_external_id = ${release.externalId}) - interval '6 hours'`,
+        ),
+      ),
+    )
     .then((rows) =>
       rows.map((r) => ({
         externalId: r.externalId,

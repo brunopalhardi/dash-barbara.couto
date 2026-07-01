@@ -1,26 +1,45 @@
 import { describe, it, expect } from "vitest";
-import { detectProduct } from "./products";
+import { detectProduct, classifyPurchaseProduct } from "./products";
 
-const ACCT_GUIA = "act_972744231680763";
-const ACCT_DESAFIO = "act_1394993860878989";
+// Catálogo da Bárbara: só "desafio" (conta de vendas) + "geral".
+const ACCT_DESAFIO = "act_1140431247243919";
+const ACCT_OUTRA = "act_1610541399726913"; // conta de seguidores/base
 
 describe("detectProduct", () => {
-  it("campanhas PERPETUO-GA são guia", () => {
-    expect(detectProduct("B-PERPETUO-GA-GRUPO-EXAUSTÃO-A", ACCT_GUIA)).toBe("guia");
+  it("IMERSÃO-VENDAS na conta de vendas é desafio", () => {
+    expect(detectProduct("B-IMERSÃO-VENDAS-F-LP1", ACCT_DESAFIO)).toBe("desafio");
   });
-  it("remarketing PERPETUO-GUIA é guia", () => {
-    expect(detectProduct("B-PERPETUO-GUIA-F-Remarketing Checkout", ACCT_GUIA)).toBe("guia");
+  it("tolera IMERSAO sem acento", () => {
+    expect(detectProduct("B-IMERSAO-VENDAS-ABERTO", ACCT_DESAFIO)).toBe("desafio");
   });
-  it("GUIA.*OBA casa com separadores no meio (caso que o LIKE antigo perdia)", () => {
-    expect(detectProduct("GUIA-NOVO-OBA", ACCT_GUIA)).toBe("guia");
+  it("IMERSÃO-VENDAS na conta errada não atribui", () => {
+    expect(detectProduct("B-IMERSÃO-VENDAS-F-LP1", ACCT_OUTRA)).toBe("outros");
   });
-  it("post impulsionado [C1] NÃO é guia (cai em outros)", () => {
-    expect(detectProduct("[C1] Post do Instagram: cuidador", ACCT_GUIA)).toBe("outros");
+  it("campanha que não casa o regex cai em outros", () => {
+    expect(detectProduct("CRESCIMENTO-SEGUIDORES", ACCT_DESAFIO)).toBe("outros");
   });
-  it("VENDAS-DESAFIO na conta de lançamentos é desafio", () => {
-    expect(detectProduct("B-VENDAS-DESAFIO-F-LP1", ACCT_DESAFIO)).toBe("desafio");
+});
+
+describe("classifyPurchaseProduct", () => {
+  it("ingresso (Imersão 7 dias) pelo id → desafio", () => {
+    expect(classifyPurchaseProduct("7206438", "Kit Imersão 7 dias - Cura nas tuas Mãos")).toBe("desafio");
   });
-  it("nome de desafio na conta errada não atribui", () => {
-    expect(detectProduct("B-VENDAS-DESAFIO-F-LP1", ACCT_GUIA)).toBe("outros");
+  it("principal Base pelo id → principal_base", () => {
+    expect(classifyPurchaseProduct("6886262", "KIT - CURSO SHIATSU MEDICINA")).toBe("principal_base");
+  });
+  it("principal Profissional pelo id → principal_prof (todos os checkouts do cluster)", () => {
+    for (const id of ["6176589", "4396164", "5428090", "5428163", "7377653", "7362920"]) {
+      expect(classifyPurchaseProduct(id, "qualquer nome")).toBe("principal_prof");
+    }
+  });
+  it("classifica por nome exato quando o id não vem (histórico)", () => {
+    expect(classifyPurchaseProduct(null, "KIT CURSO PROFISSIONAL SHIATSU MEDICINA")).toBe("principal_prof");
+  });
+  it("NÃO confunde por substring 'shiatsu medicina' — Master cai em outros (regressão)", () => {
+    expect(classifyPurchaseProduct("4479740", "Master Shiatsu Medicina")).toBe("outros");
+    expect(classifyPurchaseProduct(null, "KIT Prática Intensiva Master")).toBe("outros");
+  });
+  it("produto desconhecido → outros", () => {
+    expect(classifyPurchaseProduct("999", "Produto Random")).toBe("outros");
   });
 });

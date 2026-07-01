@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Mail, Check, X } from "lucide-react";
 import { fmt } from "./format";
 import { BuyerDrawer } from "./buyer-drawer";
+import { ShowMoreButton } from "./show-more-button";
 import type { BuyerRow } from "@/lib/queries/purchases";
 
 interface Props {
@@ -93,8 +94,11 @@ function GroupPill({ status }: { status: boolean | null | undefined }) {
   );
 }
 
+const PAGE_SIZE = 10;
+
 export function BuyersTable({ buyers, showInGroup = false }: Props) {
   const [selected, setSelected] = useState<BuyerRow | null>(null);
+  const [visible, setVisible] = useState(PAGE_SIZE);
 
   if (buyers.length === 0) {
     return (
@@ -116,10 +120,12 @@ export function BuyersTable({ buyers, showInGroup = false }: Props) {
     ? "grid-cols-[36px_1fr_auto_auto_auto]"
     : "grid-cols-[36px_1fr_auto_auto]";
 
+  const shown = buyers.slice(0, visible);
+
   return (
     <>
       <div className="space-y-2">
-        {buyers.map((b) => {
+        {shown.map((b) => {
           const phone = b.buyerPhoneE164;
           const phoneLink = whatsappLink(phone);
           const avatar = avatarFor(b.buyerName);
@@ -205,6 +211,13 @@ export function BuyersTable({ buyers, showInGroup = false }: Props) {
           );
         })}
       </div>
+
+      <ShowMoreButton
+        shown={shown.length}
+        total={buyers.length}
+        step={PAGE_SIZE}
+        onMore={() => setVisible((v) => v + PAGE_SIZE)}
+      />
 
       {/* Summary strip */}
       <div className="mt-4 rounded-md border border-border bg-card p-4">

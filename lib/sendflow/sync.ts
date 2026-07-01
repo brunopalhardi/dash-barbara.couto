@@ -30,7 +30,7 @@ import {
   type SendflowGroup,
 } from "./client";
 import { normalizePhone } from "@/lib/utils/phone";
-import { isAdminPhone } from "./admins";
+import { isAdminPhone, collectAdminPhones } from "./admins";
 
 const THROTTLE_MS = 1500;
 
@@ -200,10 +200,14 @@ export async function syncSendflow(opts: SyncOpts): Promise<SendflowSyncStats> {
         const apiScoring = await client.getLeadscoring(r.id);
         await sleep(THROTTLE_MS);
 
+        // Admins desta release vêm da própria API (campo admins por grupo) —
+        // une com a lista hardcoded (OBA). Sem isso, admins de Portugal da
+        // Barbara apareceriam como "top leads" no leadscoring.
+        const releaseAdmins = collectAdminPhones(apiGroups);
         for (const row of apiScoring) {
           const phone = normalizePhone(row.phone);
           if (!phone) continue;
-          if (isAdminPhone(phone)) continue;
+          if (isAdminPhone(phone) || releaseAdmins.has(phone)) continue;
           await db
             .insert(sendflowLeadscoring)
             .values({

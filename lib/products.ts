@@ -15,6 +15,14 @@ import { CLIENT_PRODUCTS } from "@/lib/client-config";
 export type { ProductSlug } from "@/lib/client-config";
 import type { ProductSlug } from "@/lib/client-config";
 
+/**
+ * Slug de classificação de COMPRA. Estende ProductSlug com os produtos PRINCIPAIS
+ * de backend (vendidos no pós-ingresso do Desafio) que NÃO têm dashboard/conta
+ * Meta próprios — existem só pra cruzar com o comprador de ingresso no funil de
+ * 2 etapas. Por isso ficam fora de PRODUCTS/getProduct (não poluem nav/Geral).
+ */
+export type PurchaseSlug = ProductSlug | "principal_base" | "principal_prof";
+
 export interface Product {
   slug: ProductSlug;
   label: string;
@@ -87,7 +95,7 @@ export function detectProduct(
  * e/ou o nome exato aqui.
  */
 interface HotmartProduct {
-  slug: Exclude<ProductSlug, "geral">;
+  slug: Exclude<PurchaseSlug, "geral">;
   /** ids do produto na Hotmart (`data.product.id`) */
   hotmartIds: string[];
   /** nomes exatos do produto (comparados com trim, case-insensitive) */
@@ -96,11 +104,32 @@ interface HotmartProduct {
 
 const HOTMART_PRODUCTS: HotmartProduct[] = [
   {
+    // Ingresso do Desafio (Imersão 7 dias) — etapa 1 do funil.
     slug: "desafio",
     hotmartIds: ["7206438"],
     names: ["Kit Imersão 7 dias - Cura nas tuas Mãos"],
   },
-  // Futuro: Low Ticket e Despertar entram aqui quando ligarmos os produtos.
+  {
+    // Produto principal "Base" — Curso Shiatsu Medicina (NÃO o profissional).
+    slug: "principal_base",
+    hotmartIds: ["6886262"],
+    names: ["KIT - CURSO SHIATSU MEDICINA"],
+  },
+  {
+    // Produto principal "Profissional" — mesmo curso vendido por checkouts
+    // diferentes (base/REN/FL/CSM). Todos os IDs entram pra não perder venda;
+    // o time confirma depois qual checkout está ativo (Bruno, 2026-06-21).
+    slug: "principal_prof",
+    hotmartIds: ["6176589", "4396164", "5428090", "5428163", "7377653", "7362920"],
+    names: [
+      "KIT CURSO PROFISSIONAL SHIATSU MEDICINA",
+      "Curso Shiatsu Medicina Profissional",
+      "Kit Curso Shiatsu Medicina Profissional",
+      "Kit [REN] Curso Shiatsu Medicina Profissional",
+      "FL - KIT Curso de Shiatsu Medicina Profissional",
+      "CSM - KIT Curso de Shiatsu Medicina Profissional",
+    ],
+  },
 ];
 
 /**
@@ -110,7 +139,7 @@ const HOTMART_PRODUCTS: HotmartProduct[] = [
 export function classifyPurchaseProduct(
   productId: string | null | undefined,
   productName: string | null | undefined,
-): ProductSlug | "outros" {
+): PurchaseSlug | "outros" {
   const id = productId != null ? String(productId).trim() : "";
   if (id) {
     for (const p of HOTMART_PRODUCTS) {

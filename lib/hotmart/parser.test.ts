@@ -4,7 +4,7 @@ import { parsePurchasePayload } from "./parser";
 const samplePayload = {
   event: "PURCHASE_APPROVED",
   data: {
-    product: { id: 7523998, name: "Desafio O Bom do Alzheimer" },
+    product: { id: 7206438, name: "Kit Imersão 7 dias - Cura nas tuas Mãos" },
     buyer: {
       name: "Maria Silva",
       email: "maria@example.com",
@@ -32,7 +32,7 @@ describe("parsePurchasePayload", () => {
     expect(result!.buyerPhoneE164).toBe("5511987654321");
     expect(result!.valueCents).toBe(19700);
     expect(result!.currency).toBe("BRL");
-    expect(result!.productNameRaw).toBe("Desafio O Bom do Alzheimer");
+    expect(result!.productNameRaw).toBe("Kit Imersão 7 dias - Cura nas tuas Mãos");
     expect(result!.purchasedAt).toBeInstanceOf(Date);
   });
 
@@ -65,20 +65,20 @@ describe("parsePurchasePayload", () => {
     expect(result!.buyerPhoneE164).toBe("5511987654321");
   });
 
-  it("classifica Desafio pelo id do produto", () => {
+  it("classifica o ingresso (Desafio) pelo id do produto", () => {
     const result = parsePurchasePayload(samplePayload);
     expect(result!.productSlug).toBe("desafio");
   });
 
-  it("classifica Guia pelo id do produto", () => {
+  it("classifica o produto principal Profissional pelo id", () => {
     const result = parsePurchasePayload({
       ...samplePayload,
       data: {
         ...samplePayload.data,
-        product: { id: 6753137, name: "GUIA ALZHEIMER - O PRIMEIRO PASSO PARA CUIDAR" },
+        product: { id: 6176589, name: "KIT CURSO PROFISSIONAL SHIATSU MEDICINA" },
       },
     });
-    expect(result!.productSlug).toBe("guia");
+    expect(result!.productSlug).toBe("principal_prof");
   });
 
   it("classifica por nome exato quando o id não vem no payload (histórico)", () => {
@@ -86,16 +86,16 @@ describe("parsePurchasePayload", () => {
       ...samplePayload,
       data: {
         ...samplePayload.data,
-        product: { name: "GUIA ALZHEIMER - O PRIMEIRO PASSO PARA CUIDAR" },
+        product: { name: "KIT - CURSO SHIATSU MEDICINA" },
       },
     });
-    expect(result!.productSlug).toBe("guia");
+    expect(result!.productSlug).toBe("principal_base");
   });
 
-  it("NÃO confunde outros produtos que têm 'guia' no nome (regressão)", () => {
+  it("NÃO confunde por substring 'shiatsu medicina' — Master cai em outros (regressão)", () => {
     for (const name of [
-      "E-Book - Higiene do Sono - Guia prático para dormir melhor",
-      "GUIA DE VIAGEM - Para quem vai viajar com uma pessoa com Alzheimer ou outras demências",
+      "Master Shiatsu Medicina",
+      "KIT Prática Intensiva Master",
     ]) {
       const result = parsePurchasePayload({
         ...samplePayload,

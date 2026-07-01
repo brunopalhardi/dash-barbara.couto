@@ -1,6 +1,12 @@
+"use client";
+
+import { useState } from "react";
 import { ExternalLink, TrendingUp, TrendingDown, AlertTriangle } from "lucide-react";
 import { fmt, cpaTone, type CpaTone } from "./format";
+import { ShowMoreButton } from "./show-more-button";
 import type { PageFunnelRow } from "@/lib/queries/funnel";
+
+const PAGE_SIZE = 10;
 
 function ratio(num: number, den: number): number {
   return den > 0 ? (num / den) * 100 : 0;
@@ -174,6 +180,7 @@ function FunnelStage({ label, pct, empty, tone = "default", position }: FunnelSt
 }
 
 export function FunnelTablePage({ rows }: { rows: PageFunnelRow[] }) {
+  const [visible, setVisible] = useState(PAGE_SIZE);
   if (rows.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-6 text-center">
@@ -208,9 +215,11 @@ export function FunnelTablePage({ rows }: { rows: PageFunnelRow[] }) {
     { clicks: 0, spend: 0, lpv: 0, chkt: 0, purchase: 0 },
   );
 
+  const shown = rows.slice(0, visible);
+
   return (
     <div className="space-y-3">
-      {rows.map((r, idx) => {
+      {shown.map((r, idx) => {
         const cpa = r.purchase > 0 ? r.spend / r.purchase : NaN;
         const isBest = r.landingUrl !== null && r.landingUrl === bestUrl;
         const isWorst =
@@ -376,6 +385,13 @@ export function FunnelTablePage({ rows }: { rows: PageFunnelRow[] }) {
           </article>
         );
       })}
+
+      <ShowMoreButton
+        shown={shown.length}
+        total={rows.length}
+        step={PAGE_SIZE}
+        onMore={() => setVisible((v) => v + PAGE_SIZE)}
+      />
 
       {/* Totals strip */}
       <article className="rounded-md border border-border bg-card p-5">
